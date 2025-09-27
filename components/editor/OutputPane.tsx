@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Copy, Download, FileWarning } from "lucide-react"
+import { HumanReadable } from "./HumanReadable"
 
 type OutputPaneProps = {
   status: "idle" | "valid" | "invalid" | "processing"
@@ -81,28 +82,7 @@ export function OutputPane({ status, xml, readable, errors, onCopyXml, onDownloa
                 Human-readable summary will appear here after processing...
               </div>
             ) : (
-              <div className="space-y-4">
-                <table className="w-full text-sm">
-                  <tbody className="space-y-2">
-                    <tr className="border-b">
-                      <td className="font-medium pr-4 py-2">Title</td>
-                      <td className="py-2">{readable?.ids?.title || "N/A"}</td>
-                    </tr>
-                    <tr className="border-b">
-                      <td className="font-medium pr-4 py-2">IFC Version</td>
-                      <td className="py-2">{readable?.ids?.ifcVersion || "N/A"}</td>
-                    </tr>
-                    <tr className="border-b">
-                      <td className="font-medium pr-4 py-2">Rules</td>
-                      <td className="py-2">{readable?.ids?.rules?.length ?? 0}</td>
-                    </tr>
-                    <tr>
-                      <td className="font-medium pr-4 py-2">Description</td>
-                      <td className="py-2">{readable?.ids?.description || "N/A"}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+              <HumanReadable data={readable} />
             )}
           </ScrollArea>
         </TabsContent>
