@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import { Copy, Download, FileWarning } from "lucide-react"
+import { Copy, Download, FileWarning, Loader2 } from "lucide-react"
+import { HumanReadable } from "./HumanReadable"
+import { useState } from 'react';
 
 type OutputPaneProps = {
   status: "idle" | "valid" | "invalid" | "processing"
@@ -17,7 +19,81 @@ type OutputPaneProps = {
 }
 
 export function OutputPane({ status, xml, readable, errors, onCopyXml, onDownloadXml }: OutputPaneProps) {
-  const hasErrors = (errors?.length ?? 0) > 0
+  const hasErrors = (errors?.length ?? 0) > 0;
+  const [validationResult, setValidationResult] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
+
+  const handleValidate = async () => {
+    if (!xml || hasErrors) return;
+    setIsValidating(true);
+    setValidationResult(null);
+    try {
+      const response = await fetch('/api/validate-ids', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ xml }),
+      });
+      const data = await response.json();
+      if (data.error) {
+        setValidationResult(`Error: ${data.error}`);
+      } else {
+        // Parse IDS audit response for better display
+        const statusMessages: { [key: number]: { text: string; color: string; icon: string } } = {
+          0: { text: 'Valid IDS - No errors found', color: 'text-green-600', icon: '✅' },
+          3: { text: 'Invalid Options - Configuration error', color: 'text-yellow-600', icon: '⚙️' },
+          4: { text: 'Not Found - Referenced resources missing', color: 'text-orange-600', icon: '🔍' },
+          5: { text: 'Structure Error - Invalid XML or missing elements', color: 'text-red-600', icon: '🏗️' },
+          6: { text: 'Content Error - Violates specification rules', color: 'text-red-600', icon: '📝' },
+          7: { text: 'Schema Error - Doesn\'t conform to XSD schema', color: 'text-red-600', icon: '📋' },
+          8: { text: 'Unhandled Error - Unexpected validation error', color: 'text-red-600', icon: '❌' }
+        };
+
+        const statusInfo = statusMessages[data.status] || { text: `Unknown status code ${data.status}`, color: 'text-gray-600', icon: '❓' };
+
+        let display = '';
+
+        // Overall status
+        display += `${statusInfo.icon} **${statusInfo.text}**\n\n`;
+
+        // Parse events if available
+        if (data.events && Array.isArray(data.events)) {
+          const errors = data.events.filter((e: any) => e.Level === 'Error' || e.Level === 'Critical');
+          const warnings = data.events.filter((e: any) => e.Level === 'Warning');
+          const info = data.events.filter((e: any) => e.Level === 'Information');
+
+          if (errors.length > 0) {
+            display += `## ❌ Errors (${errors.length})\n\n`;
+            errors.forEach((error: any, i: number) => {
+              display += `${i + 1}. ${error.Message}\n\n`;
+            });
+          }
+
+          if (warnings.length > 0) {
+            display += `## ⚠️ Warnings (${warnings.length})\n\n`;
+            warnings.forEach((warning: any, i: number) => {
+              display += `${i + 1}. ${warning.Message}\n\n`;
+            });
+          }
+
+          if (info.length > 0) {
+            display += `## ℹ️ Information (${info.length})\n\n`;
+            info.forEach((infoItem: any, i: number) => {
+              display += `${i + 1}. ${infoItem.Message}\n\n`;
+            });
+          }
+        } else {
+          // Fallback to raw text
+          display += data.text || JSON.stringify(data, null, 2);
+        }
+
+        setValidationResult(display);
+      }
+    } catch (err) {
+      setValidationResult('Failed to connect to validation service');
+    } finally {
+      setIsValidating(false);
+    }
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -35,6 +111,14 @@ export function OutputPane({ status, xml, readable, errors, onCopyXml, onDownloa
           </Button>
           <Button size="sm" disabled={hasErrors || !xml} onClick={onDownloadXml} className="h-6 text-xs">
             <Download className="h-3 w-3 mr-1" /> Download .ids
+          </Button>
+          <Button
+            size="sm"
+            disabled={hasErrors || !xml || isValidating}
+            onClick={handleValidate}
+            className="h-6 text-xs"
+          >
+            {isValidating ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null} Validate IDS
           </Button>
         </div>
       </div>
@@ -60,6 +144,7 @@ export function OutputPane({ status, xml, readable, errors, onCopyXml, onDownloa
           <TabsList>
             <TabsTrigger value="xml">XML (.ids)</TabsTrigger>
             <TabsTrigger value="readable">Human‑readable</TabsTrigger>
+            <TabsTrigger value="validation">Validation</TabsTrigger>
           </TabsList>
         </div>
         <Separator />
@@ -81,27 +166,37 @@ export function OutputPane({ status, xml, readable, errors, onCopyXml, onDownloa
                 Human-readable summary will appear here after processing...
               </div>
             ) : (
-              <div className="space-y-4">
-                <table className="w-full text-sm">
-                  <tbody className="space-y-2">
-                    <tr className="border-b">
-                      <td className="font-medium pr-4 py-2">Title</td>
-                      <td className="py-2">{readable?.ids?.title || "N/A"}</td>
-                    </tr>
-                    <tr className="border-b">
-                      <td className="font-medium pr-4 py-2">IFC Version</td>
-                      <td className="py-2">{readable?.ids?.ifcVersion || "N/A"}</td>
-                    </tr>
-                    <tr className="border-b">
-                      <td className="font-medium pr-4 py-2">Rules</td>
-                      <td className="py-2">{readable?.ids?.rules?.length ?? 0}</td>
-                    </tr>
-                    <tr>
-                      <td className="font-medium pr-4 py-2">Description</td>
-                      <td className="py-2">{readable?.ids?.description || "N/A"}</td>
-                    </tr>
-                  </tbody>
-                </table>
+              <HumanReadable data={readable} />
+            )}
+          </ScrollArea>
+        </TabsContent>
+        <TabsContent value="validation" className="flex-1">
+          <ScrollArea className="h-[calc(100vh-220px)] px-4 py-3">
+            {isValidating ? (
+              <div className="flex items-center justify-center h-32">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : validationResult ? (
+              <div className="prose prose-sm max-w-none">
+                <div className="text-sm font-medium mb-2">IDS Compliance Validation:</div>
+                <div className="bg-muted p-4 rounded-md whitespace-pre-line">
+                  {validationResult.split('\n').map((line, i) => {
+                    if (line.startsWith('✅') || line.startsWith('⚙️') || line.startsWith('🔍') || line.startsWith('🏗️') || line.startsWith('📝') || line.startsWith('📋') || line.startsWith('❌')) {
+                      return <div key={i} className="font-semibold text-lg mb-2">{line}</div>;
+                    }
+                    if (line.startsWith('## ')) {
+                      const isError = line.includes('❌');
+                      const isWarning = line.includes('⚠️');
+                      const className = isError ? 'text-red-600 font-medium' : isWarning ? 'text-yellow-600 font-medium' : 'text-blue-600 font-medium';
+                      return <div key={i} className={`${className} mt-3 mb-1`}>{line.replace('## ', '')}</div>;
+                    }
+                    return <div key={i}>{line}</div>;
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground italic">
+                Click "Validate IDS" to check compliance via the API...
               </div>
             )}
           </ScrollArea>
