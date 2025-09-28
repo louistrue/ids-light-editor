@@ -1,5 +1,5 @@
 import YAML from "yaml"
-import Ajv, { type DefinedError } from "ajv"
+import Ajv, { type ErrorObject } from "ajv"
 import addFormats from "ajv-formats"
 import { create } from "xmlbuilder2"
 
@@ -16,6 +16,10 @@ export type SimpleDatatype =
   | "date"
   | "datetime"
   | "time"
+  | "thermaltransmittance"
+  | "volumetricflowrate"
+  | "power"
+  | "electricvoltage"
 
 export type RuleRequirement = {
   name: string // e.g. "Pset_DoorCommon.FireRating" or "Name" or "Qto_SpaceBaseQuantities.NetFloorArea"
@@ -127,6 +131,10 @@ export const IDS_LIGHT_JSON_SCHEMA = {
             "date",
             "datetime",
             "time",
+            "thermaltransmittance",
+            "volumetricflowrate",
+            "power",
+            "electricvoltage",
           ],
         },
         presence: { enum: ["required", "optional", "prohibited"] },
@@ -157,7 +165,7 @@ export function parseIdsLight(text: string): IdsLight {
   // Try JSON first, then YAML
   try {
     return JSON.parse(src)
-  } catch {}
+  } catch { }
   try {
     return YAML.parse(src)
   } catch (e: any) {
@@ -173,7 +181,7 @@ export function validateIdsLight(data: unknown): { valid: boolean; errors?: stri
   return { valid: false, errors: errs }
 }
 
-function prettyAjvError(e: DefinedError): string {
+function prettyAjvError(e: ErrorObject): string {
   const path = e.instancePath || "(root)"
   return `${path} ${e.message ?? ""}`.trim()
 }
@@ -189,13 +197,19 @@ export function convertIdsLightToXml(data: IdsLight, opts: ConvertOptions = {}):
   const root = create({ version: "1.0", encoding: "UTF-8" }).ele("ids:ids", {
     "xmlns:ids": "http://standards.buildingsmart.org/IDS",
     "xmlns:xs": "http://www.w3.org/2001/XMLSchema",
+    "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
+    "xsi:schemaLocation": "http://standards.buildingsmart.org/IDS http://standards.buildingsmart.org/IDS/1.0/ids.xsd",
   })
 
   // info
   const info = root.ele("ids:info")
   if (data.ids.title) info.ele("ids:title").txt(data.ids.title)
   if (data.ids.description) info.ele("ids:description").txt(data.ids.description)
-  if (data.ids.author) info.ele("ids:author").txt(data.ids.author)
+  if (data.ids.author) {
+    const cleanAuthor = data.ids.author.replace(/\s+/g, '').toLowerCase();
+    const authorEmail = cleanAuthor.includes('@') ? cleanAuthor : `${cleanAuthor}@ids-light.com`;
+    info.ele("ids:author").txt(authorEmail);
+  }
   if (data.ids.date) info.ele("ids:date").txt(data.ids.date)
 
   const specs = root.ele("ids:specifications")
@@ -207,16 +221,10 @@ export function convertIdsLightToXml(data: IdsLight, opts: ConvertOptions = {}):
     })
 
     // ---- Applicability
-    const appl = spec.ele("ids:applicability")
+    const appl = spec.ele("ids:applicability", { minOccurs: "1", maxOccurs: "unbounded" })
     const ent = appl.ele("ids:entity")
-    idsSimple(ent, "ids:name", rule.entity)
+    idsSimple(ent, "ids:name", rule.entity.toUpperCase())
     if (rule.predefinedType) idsSimple(ent, "ids:predefinedType", rule.predefinedType)
-
-    if (rule.classification) {
-      const cls = appl.ele("ids:classification")
-      if (rule.classification.value) idsSimple(cls, "ids:value", rule.classification.value)
-      idsSimple(cls, "ids:system", rule.classification.system)
-    }
 
     // ---- Requirements
     const reqs = spec.ele("ids:requirements", { description: "Generated from IDS-Light" })
@@ -233,7 +241,7 @@ export function convertIdsLightToXml(data: IdsLight, opts: ConvertOptions = {}):
     // Properties
     for (const p of rule.properties || []) {
       const { pset, base } = splitPropertyName(p.name)
-      const ifcType = toIfcType(p.datatype, pset)
+      const ifcType = toIfcType(p.datatype, base)
       const node = reqs.ele("ids:property", {
         dataType: ifcType,
         cardinality: presenceToCard(p.presence),
@@ -246,7 +254,7 @@ export function convertIdsLightToXml(data: IdsLight, opts: ConvertOptions = {}):
     // Quantities (treated as properties with Qto_* Pset)
     for (const q of rule.quantities || []) {
       const { pset, base } = splitPropertyName(q.name)
-      const ifcType = toIfcType(q.datatype ?? guessMeasureFromQto(base), pset)
+      const ifcType = toIfcType(q.datatype ?? guessMeasureFromQto(base), base)
       const node = reqs.ele("ids:property", {
         dataType: ifcType,
         cardinality: presenceToCard(q.presence),
@@ -276,10 +284,12 @@ function splitPropertyName(full: string): { pset: string; base: string } {
 }
 
 // Map simple datatypes → IFC defined types
-function toIfcType(datatype: SimpleDatatype | undefined, pset: string): string {
+function toIfcType(datatype: SimpleDatatype | undefined, base: string): string {
   if (!datatype) return "IFCLABEL"
   switch (datatype) {
     case "string":
+      // Special cases for specific properties
+      if (base.toLowerCase().includes("thermaltransmittance")) return "IFCTHERMALTRANSMITTANCEMEASURE"
       return "IFCLABEL"
     case "boolean":
       return "IFCBOOLEAN"
@@ -295,6 +305,14 @@ function toIfcType(datatype: SimpleDatatype | undefined, pset: string): string {
       return "IFCVOLUMEMEASURE"
     case "count":
       return "IFCCOUNTMEASURE"
+    case "thermaltransmittance":
+      return "IFCTHERMALTRANSMITTANCEMEASURE"
+    case "volumetricflowrate":
+      return "IFCVOLUMETRICFLOWRATEMEASURE"
+    case "power":
+      return "IFCPOWERMEASURE"
+    case "electricvoltage":
+      return "IFCELECTRICVOLTAGEMEASURE"
     case "date":
       return "IFCDATE"
     case "datetime":

@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useEffect, useRef, useState, useCallback } from "react"
+import { Loader2 } from 'lucide-react';
 
 type ConvertStatus = "idle" | "processing" | "valid" | "invalid"
 
@@ -142,7 +143,7 @@ export function EditorShell() {
   const [xml, setXml] = useState<string>("")
   const [readable, setReadable] = useState<any>(null)
   const [errors, setErrors] = useState<string[]>([])
-  const [outputView, setOutputView] = useState<"xml" | "readable">("xml")
+  const [outputView, setOutputView] = useState<"xml" | "readable" | "validation">("xml")
   const [copyStatus, setCopyStatus] = useState<"idle" | "success" | "error">("idle")
   const [downloadStatus, setDownloadStatus] = useState<"idle" | "downloading" | "success" | "error">("idle")
   const [isDarkMode, setIsDarkMode] = useState(false)
@@ -156,6 +157,10 @@ export function EditorShell() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const workerRef = useRef<Worker | null>(null)
+
+  const [validationResult, setValidationResult] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
+  const [lastValidatedXml, setLastValidatedXml] = useState<string>('');
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme")
@@ -264,6 +269,13 @@ export function EditorShell() {
     return () => clearTimeout(t)
   }, [source])
 
+  // Auto-validate when switching to validation tab
+  useEffect(() => {
+    if (outputView === "validation" && xml && xml !== lastValidatedXml && !isValidating) {
+      handleValidate()
+    }
+  }, [outputView, xml, lastValidatedXml, isValidating])
+
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault()
     setIsDragging(true)
@@ -342,7 +354,7 @@ export function EditorShell() {
       })
 
       if (window.navigator && (window.navigator as any).msSaveBlob) {
-        ;(window.navigator as any).msSaveBlob(blob, "output.ids")
+        ; (window.navigator as any).msSaveBlob(blob, "output.ids")
       } else {
         const url = URL.createObjectURL(blob)
         const link = document.createElement("a")
@@ -365,6 +377,79 @@ export function EditorShell() {
       setTimeout(() => setDownloadStatus("idle"), 3000)
     }
   }
+
+  const handleValidate = async () => {
+    if (!xml) return;
+    setIsValidating(true);
+    setValidationResult(null);
+    try {
+      const response = await fetch('/api/validate-ids', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ xml }),
+      });
+      const data = await response.json();
+      if (data.error) {
+        setValidationResult(`Error: ${data.error}`);
+      } else {
+        // Parse IDS audit response for better display
+        const statusMessages: { [key: number]: { text: string; color: string; icon: string } } = {
+          0: { text: 'Valid IDS - No errors found', color: 'text-green-600', icon: '✅' },
+          3: { text: 'Invalid Options - Configuration error', color: 'text-yellow-600', icon: '⚙️' },
+          4: { text: 'Not Found - Referenced resources missing', color: 'text-orange-600', icon: '🔍' },
+          5: { text: 'Structure Error - Invalid XML or missing elements', color: 'text-red-600', icon: '🏗️' },
+          6: { text: 'Content Error - Violates specification rules', color: 'text-red-600', icon: '📝' },
+          7: { text: 'Schema Error - Doesn\'t conform to XSD schema', color: 'text-red-600', icon: '📋' },
+          8: { text: 'Unhandled Error - Unexpected validation error', color: 'text-red-600', icon: '❌' }
+        };
+
+        const statusInfo = statusMessages[data.status] || { text: `Unknown status code ${data.status}`, color: 'text-gray-600', icon: '❓' };
+
+        let display = '';
+
+        // Overall status
+        display += `${statusInfo.icon} **${statusInfo.text}**\n\n`;
+
+        // Parse events if available
+        if (data.events && Array.isArray(data.events)) {
+          const errors = data.events.filter((e: any) => e.Level === 'Error' || e.Level === 'Critical');
+          const warnings = data.events.filter((e: any) => e.Level === 'Warning');
+          const info = data.events.filter((e: any) => e.Level === 'Information');
+
+          if (errors.length > 0) {
+            display += `## ❌ Errors (${errors.length})\n\n`;
+            errors.forEach((error: any, i: number) => {
+              display += `${i + 1}. ${error.Message}\n\n`;
+            });
+          }
+
+          if (warnings.length > 0) {
+            display += `## ⚠️ Warnings (${warnings.length})\n\n`;
+            warnings.forEach((warning: any, i: number) => {
+              display += `${i + 1}. ${warning.Message}\n\n`;
+            });
+          }
+
+          if (info.length > 0) {
+            display += `## ℹ️ Information (${info.length})\n\n`;
+            info.forEach((infoItem: any, i: number) => {
+              display += `${i + 1}. ${infoItem.Message}\n\n`;
+            });
+          }
+        } else {
+          // Fallback to raw text
+          display += data.text || JSON.stringify(data, null, 2);
+        }
+
+        setValidationResult(display);
+        setLastValidatedXml(xml); // Mark this XML as validated
+      }
+    } catch (err) {
+      setValidationResult('Failed to connect to validation service');
+    } finally {
+      setIsValidating(false);
+    }
+  };
 
   const loadExample = (exampleKey: keyof typeof examples) => {
     setSource(examples[exampleKey].yaml)
@@ -592,9 +677,8 @@ export function EditorShell() {
         </div>
 
         <div
-          className={`w-1 bg-border hover:bg-primary/30 cursor-col-resize flex items-center justify-center transition-all duration-200 ${
-            isDragging ? "bg-primary w-2" : ""
-          }`}
+          className={`w-1 bg-border hover:bg-primary/30 cursor-col-resize flex items-center justify-center transition-all duration-200 ${isDragging ? "bg-primary w-2" : ""
+            }`}
           onMouseDown={handleMouseDown}
           role="separator"
           aria-label="Resize panels"
@@ -608,9 +692,8 @@ export function EditorShell() {
           }}
         >
           <div
-            className={`w-0.5 h-8 bg-muted-foreground rounded-full transition-all duration-200 ${
-              isDragging ? "bg-primary h-12" : ""
-            }`}
+            className={`w-0.5 h-8 bg-muted-foreground rounded-full transition-all duration-200 ${isDragging ? "bg-primary h-12" : ""
+              }`}
           />
         </div>
 
@@ -623,25 +706,33 @@ export function EditorShell() {
                   <div className="flex bg-muted rounded-md p-1">
                     <button
                       onClick={() => setOutputView("xml")}
-                      className={`px-3 py-1 text-xs rounded transition-all duration-200 ${
-                        outputView === "xml"
-                          ? "bg-background text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
+                      className={`px-3 py-1 text-xs rounded transition-all duration-200 ${outputView === "xml"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                        }`}
                       aria-pressed={outputView === "xml"}
                     >
                       XML
                     </button>
                     <button
                       onClick={() => setOutputView("readable")}
-                      className={`px-3 py-1 text-xs rounded transition-all duration-200 ${
-                        outputView === "readable"
-                          ? "bg-background text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
+                      className={`px-3 py-1 text-xs rounded transition-all duration-200 ${outputView === "readable"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                        }`}
                       aria-pressed={outputView === "readable"}
                     >
                       Structure
+                    </button>
+                    <button
+                      onClick={() => setOutputView("validation")}
+                      className={`px-3 py-1 text-xs rounded transition-all duration-200 ${outputView === "validation"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      aria-pressed={outputView === "validation"}
+                    >
+                      Validation
                     </button>
                   </div>
                 </div>
@@ -649,17 +740,16 @@ export function EditorShell() {
                   <button
                     onClick={onCopyXml}
                     disabled={!xml || copyStatus === "success"}
-                    className={`text-xs px-3 py-1.5 rounded-md transition-all duration-200 flex items-center gap-1.5 font-medium focus:ring-2 focus:ring-primary/20 ${
-                      copyStatus === "success"
-                        ? "bg-green-500 text-white"
-                        : copyStatus === "error"
-                          ? "bg-destructive text-destructive-foreground"
-                          : downloadStatus === "downloading"
-                            ? "bg-green-400 text-white cursor-wait"
-                            : !xml
-                              ? "bg-muted text-muted-foreground cursor-not-allowed"
-                              : "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80"
-                    }`}
+                    className={`text-xs px-3 py-1.5 rounded-md transition-all duration-200 flex items-center gap-1.5 font-medium focus:ring-2 focus:ring-primary/20 ${copyStatus === "success"
+                      ? "bg-green-500 text-white"
+                      : copyStatus === "error"
+                        ? "bg-destructive text-destructive-foreground"
+                        : downloadStatus === "downloading"
+                          ? "bg-green-400 text-white cursor-wait"
+                          : !xml
+                            ? "bg-muted text-muted-foreground cursor-not-allowed"
+                            : "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80"
+                      }`}
                     title="Copy XML (Ctrl+Shift+C)"
                     aria-label="Copy generated XML to clipboard"
                   >
@@ -668,17 +758,16 @@ export function EditorShell() {
                   <button
                     onClick={onDownloadXml}
                     disabled={!xml || downloadStatus === "downloading" || downloadStatus === "success"}
-                    className={`text-xs px-3 py-1.5 rounded-md transition-all duration-200 flex items-center gap-1.5 font-medium focus:ring-2 focus:ring-primary/20 ${
-                      downloadStatus === "success"
-                        ? "bg-green-500 text-white"
-                        : downloadStatus === "error"
-                          ? "bg-destructive text-destructive-foreground"
-                          : downloadStatus === "downloading"
-                            ? "bg-green-400 text-white cursor-wait"
-                            : !xml
-                              ? "bg-muted text-muted-foreground cursor-not-allowed"
-                              : "bg-green-500 text-white hover:bg-green-600 active:bg-green-700"
-                    }`}
+                    className={`text-xs px-3 py-1.5 rounded-md transition-all duration-200 flex items-center gap-1.5 font-medium focus:ring-2 focus:ring-primary/20 ${downloadStatus === "success"
+                      ? "bg-green-500 text-white"
+                      : downloadStatus === "error"
+                        ? "bg-destructive text-destructive-foreground"
+                        : downloadStatus === "downloading"
+                          ? "bg-green-400 text-white cursor-wait"
+                          : !xml
+                            ? "bg-muted text-muted-foreground cursor-not-allowed"
+                            : "bg-green-500 text-white hover:bg-green-600 active:bg-green-700"
+                      }`}
                     title="Download XML (Ctrl+Shift+D)"
                     aria-label="Download generated XML file"
                   >
@@ -810,6 +899,25 @@ export function EditorShell() {
                         )}
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {outputView === "validation" && (
+                  <div className="animate-in fade-in duration-300">
+                    <h3 className="text-sm font-medium mb-2 text-foreground">Validation Results:</h3>
+                    {isValidating ? (
+                      <div className="flex items-center justify-center h-32">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      </div>
+                    ) : validationResult ? (
+                      <pre className="text-xs bg-muted p-4 rounded-md border border-border font-mono leading-relaxed text-foreground scrollbar-thin whitespace-pre-wrap">
+                        {validationResult}
+                      </pre>
+                    ) : (
+                      <div className="text-sm text-muted-foreground flex items-center justify-center h-32">
+                        Click Validate to check XML
+                      </div>
+                    )}
                   </div>
                 )}
 

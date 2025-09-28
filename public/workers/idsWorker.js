@@ -308,158 +308,142 @@ function convertIdsLightToXml(data, opts = {}) {
 
   let xml = '<?xml version="1.0" encoding="UTF-8"?>' + newline
   xml += '<ids:ids xmlns:ids="http://standards.buildingsmart.org/IDS" '
-  xml += 'xmlns:xs="http://www.w3.org/2001/XMLSchema">' + newline
+  xml += 'xmlns:xs="http://www.w3.org/2001/XMLSchema" '
+  xml += 'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+  xml += 'xsi:schemaLocation="http://standards.buildingsmart.org/IDS http://standards.buildingsmart.org/IDS/1.0/ids.xsd">' + newline
 
   // Info section
   xml += indent + "<ids:info>" + newline
   if (ids.title) xml += indent + indent + `<ids:title>${escapeXml(ids.title)}</ids:title>` + newline
   if (ids.description)
     xml += indent + indent + `<ids:description>${escapeXml(ids.description)}</ids:description>` + newline
-  if (ids.author) xml += indent + indent + `<ids:author>${escapeXml(ids.author)}</ids:author>` + newline
+  if (ids.author) {
+    const cleanAuthor = ids.author.replace(/\s+/g, '').toLowerCase();
+    const authorEmail = cleanAuthor.includes('@') ? cleanAuthor : cleanAuthor + '@ids-light.com';
+    xml += indent + indent + `<ids:author>${escapeXml(authorEmail)}</ids:author>` + newline;
+  }
   if (ids.date) xml += indent + indent + `<ids:date>${escapeXml(ids.date)}</ids:date>` + newline
   xml += indent + "</ids:info>" + newline
 
   // Specifications
   xml += indent + "<ids:specifications>" + newline
-  ;(ids.rules || []).forEach((rule, index) => {
-    const specName = rule.name || rule.entity
-    xml +=
-      indent + indent + `<ids:specification name="${escapeXml(specName)}" ifcVersion="${ids.ifcVersion}">` + newline
+    ; (ids.rules || []).forEach((rule, index) => {
+      const specName = rule.name || rule.entity
+      xml +=
+        indent + indent + `<ids:specification name="${escapeXml(specName)}" ifcVersion="${ids.ifcVersion}">` + newline
 
-    // Applicability
-    xml += indent + indent + indent + "<ids:applicability>" + newline
-    xml += indent + indent + indent + indent + "<ids:entity>" + newline
-    xml +=
-      indent +
-      indent +
-      indent +
-      indent +
-      indent +
-      `<ids:name><ids:simpleValue>${escapeXml(rule.entity)}</ids:simpleValue></ids:name>` +
-      newline
-    if (rule.predefinedType) {
+      // Applicability
+      console.log("[WORKER] Starting applicability for rule:", rule.name)
+      xml += indent + indent + indent + `<ids:applicability minOccurs="1" maxOccurs="unbounded">` + newline
+      xml += indent + indent + indent + indent + "<ids:entity>" + newline
       xml +=
         indent +
         indent +
         indent +
         indent +
         indent +
-        `<ids:predefinedType><ids:simpleValue>${escapeXml(rule.predefinedType)}</ids:simpleValue></ids:predefinedType>` +
+        `<ids:name><ids:simpleValue>${escapeXml(rule.entity.toUpperCase())}</ids:simpleValue></ids:name>` +
         newline
-    }
-    xml += indent + indent + indent + indent + "</ids:entity>" + newline
-
-    if (rule.classification) {
-      xml += indent + indent + indent + indent + "<ids:classification>" + newline
-      if (rule.classification.value) {
+      if (rule.predefinedType) {
         xml +=
           indent +
           indent +
           indent +
           indent +
           indent +
-          `<ids:value><ids:simpleValue>${escapeXml(rule.classification.value)}</ids:simpleValue></ids:value>` +
+          `<ids:predefinedType><ids:simpleValue>${escapeXml(rule.predefinedType)}</ids:simpleValue></ids:predefinedType>` +
           newline
       }
-      xml +=
-        indent +
-        indent +
-        indent +
-        indent +
-        indent +
-        `<ids:system><ids:simpleValue>${escapeXml(rule.classification.system)}</ids:simpleValue></ids:system>` +
-        newline
-      xml += indent + indent + indent + indent + "</ids:classification>" + newline
-    }
+      xml += indent + indent + indent + indent + "</ids:entity>" + newline
 
-    xml += indent + indent + indent + "</ids:applicability>" + newline
+      xml += indent + indent + indent + "</ids:applicability>" + newline
 
-    // Requirements
-    xml += indent + indent + indent + '<ids:requirements description="Generated from IDS-Light">' + newline
+      // Requirements
+      xml += indent + indent + indent + '<ids:requirements description="Generated from IDS-Light">' + newline
 
-    // Attributes
-    ;(rule.attributes || []).forEach((attr) => {
-      const cardinality = mapPresence(attr.presence)
-      xml += indent + indent + indent + indent + `<ids:attribute cardinality="${cardinality}">` + newline
-      xml +=
-        indent +
-        indent +
-        indent +
-        indent +
-        indent +
-        `<ids:name><ids:simpleValue>${escapeXml(attr.name)}</ids:simpleValue></ids:name>` +
-        newline
-      xml += addValueRestrictions(attr, indent + indent + indent + indent + indent, newline)
-      xml += indent + indent + indent + indent + "</ids:attribute>" + newline
+        // Attributes
+        ; (rule.attributes || []).forEach((attr) => {
+          const cardinality = mapPresence(attr.presence)
+          xml += indent + indent + indent + indent + `<ids:attribute cardinality="${cardinality}">` + newline
+          xml +=
+            indent +
+            indent +
+            indent +
+            indent +
+            indent +
+            `<ids:name><ids:simpleValue>${escapeXml(attr.name)}</ids:simpleValue></ids:name>` +
+            newline
+          xml += addValueRestrictions(attr, indent + indent + indent + indent + indent, newline)
+          xml += indent + indent + indent + indent + "</ids:attribute>" + newline
+        })
+
+        // Properties
+        ; (rule.properties || []).forEach((prop) => {
+          const { pset, base } = splitPropertyName(prop.name)
+          const ifcType = toIfcType(prop.datatype, base)
+          const cardinality = mapPresence(prop.presence)
+          xml +=
+            indent +
+            indent +
+            indent +
+            indent +
+            `<ids:property dataType="${ifcType}" cardinality="${cardinality}">` +
+            newline
+          xml +=
+            indent +
+            indent +
+            indent +
+            indent +
+            indent +
+            `<ids:propertySet><ids:simpleValue>${escapeXml(pset)}</ids:simpleValue></ids:propertySet>` +
+            newline
+          xml +=
+            indent +
+            indent +
+            indent +
+            indent +
+            indent +
+            `<ids:baseName><ids:simpleValue>${escapeXml(base)}</ids:simpleValue></ids:baseName>` +
+            newline
+          xml += addValueRestrictions(prop, indent + indent + indent + indent + indent, newline)
+          xml += indent + indent + indent + indent + "</ids:property>" + newline
+        })
+
+        // Quantities
+        ; (rule.quantities || []).forEach((qty) => {
+          const { pset, base } = splitPropertyName(qty.name)
+          const ifcType = toIfcType(qty.datatype || guessMeasureFromQto(base), base)
+          const cardinality = mapPresence(qty.presence)
+          xml +=
+            indent +
+            indent +
+            indent +
+            indent +
+            `<ids:property dataType="${ifcType}" cardinality="${cardinality}">` +
+            newline
+          xml +=
+            indent +
+            indent +
+            indent +
+            indent +
+            indent +
+            `<ids:propertySet><ids:simpleValue>${escapeXml(pset)}</ids:simpleValue></ids:propertySet>` +
+            newline
+          xml +=
+            indent +
+            indent +
+            indent +
+            indent +
+            indent +
+            `<ids:baseName><ids:simpleValue>${escapeXml(base)}</ids:simpleValue></ids:baseName>` +
+            newline
+          xml += addValueRestrictions(qty, indent + indent + indent + indent + indent, newline)
+          xml += indent + indent + indent + indent + "</ids:property>" + newline
+        })
+
+      xml += indent + indent + indent + "</ids:requirements>" + newline
+      xml += indent + indent + "</ids:specification>" + newline
     })
-
-    // Properties
-    ;(rule.properties || []).forEach((prop) => {
-      const { pset, base } = splitPropertyName(prop.name)
-      const ifcType = toIfcType(prop.datatype, pset)
-      const cardinality = mapPresence(prop.presence)
-      xml +=
-        indent +
-        indent +
-        indent +
-        indent +
-        `<ids:property dataType="${ifcType}" cardinality="${cardinality}">` +
-        newline
-      xml +=
-        indent +
-        indent +
-        indent +
-        indent +
-        indent +
-        `<ids:propertySet><ids:simpleValue>${escapeXml(pset)}</ids:simpleValue></ids:propertySet>` +
-        newline
-      xml +=
-        indent +
-        indent +
-        indent +
-        indent +
-        indent +
-        `<ids:baseName><ids:simpleValue>${escapeXml(base)}</ids:simpleValue></ids:baseName>` +
-        newline
-      xml += addValueRestrictions(prop, indent + indent + indent + indent + indent, newline)
-      xml += indent + indent + indent + indent + "</ids:property>" + newline
-    })
-
-    // Quantities
-    ;(rule.quantities || []).forEach((qty) => {
-      const { pset, base } = splitPropertyName(qty.name)
-      const ifcType = toIfcType(qty.datatype || guessMeasureFromQto(base), pset)
-      const cardinality = mapPresence(qty.presence)
-      xml +=
-        indent +
-        indent +
-        indent +
-        indent +
-        `<ids:property dataType="${ifcType}" cardinality="${cardinality}">` +
-        newline
-      xml +=
-        indent +
-        indent +
-        indent +
-        indent +
-        indent +
-        `<ids:propertySet><ids:simpleValue>${escapeXml(pset)}</ids:simpleValue></ids:propertySet>` +
-        newline
-      xml +=
-        indent +
-        indent +
-        indent +
-        indent +
-        indent +
-        `<ids:baseName><ids:simpleValue>${escapeXml(base)}</ids:simpleValue></ids:baseName>` +
-        newline
-      xml += addValueRestrictions(qty, indent + indent + indent + indent + indent, newline)
-      xml += indent + indent + indent + indent + "</ids:property>" + newline
-    })
-
-    xml += indent + indent + indent + "</ids:requirements>" + newline
-    xml += indent + indent + "</ids:specification>" + newline
-  })
 
   xml += indent + "</ids:specifications>" + newline
   xml += "</ids:ids>"
@@ -496,10 +480,12 @@ function splitPropertyName(full) {
   return { pset: full.slice(0, i), base: full.slice(i + 1) }
 }
 
-function toIfcType(datatype, pset) {
+function toIfcType(datatype, base) {
   if (!datatype) return "IFCLABEL"
   switch (datatype) {
     case "string":
+      // Special cases for specific properties
+      if (base.toLowerCase().includes("thermaltransmittance")) return "IFCTHERMALTRANSMITTANCEMEASURE"
       return "IFCLABEL"
     case "boolean":
       return "IFCBOOLEAN"
@@ -515,6 +501,14 @@ function toIfcType(datatype, pset) {
       return "IFCVOLUMEMEASURE"
     case "count":
       return "IFCCOUNTMEASURE"
+    case "thermaltransmittance":
+      return "IFCTHERMALTRANSMITTANCEMEASURE"
+    case "volumetricflowrate":
+      return "IFCVOLUMETRICFLOWRATEMEASURE"
+    case "power":
+      return "IFCPOWERMEASURE"
+    case "electricvoltage":
+      return "IFCELECTRICVOLTAGEMEASURE"
     case "date":
       return "IFCDATE"
     case "datetime":
