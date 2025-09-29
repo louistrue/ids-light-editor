@@ -158,8 +158,20 @@ export function EditorShell() {
       : (localStorage.getItem("idsLightSource") ?? examples.basic.yaml),
   )
   const [status, setStatus] = useState<ConvertStatus>("idle")
-  const [xml, setXml] = useState<string>("")
-  const [readable, setReadable] = useState<any>(null)
+  const [xml, setXml] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    return sessionStorage.getItem('idsLightXml') ?? '';
+  });
+  const [readable, setReadable] = useState<any>(() => {
+    if (typeof window === 'undefined') return null;
+    const stored = sessionStorage.getItem('idsLightReadable');
+    try {
+      return stored ? JSON.parse(stored) : null;
+    } catch (e) {
+      console.error("Failed to parse readable from sessionStorage", e);
+      return null;
+    }
+  });
   const [errors, setErrors] = useState<string[]>([])
   const [outputView, setOutputView] = useState<"xml" | "readable" | "validation">("xml")
   const [copyStatus, setCopyStatus] = useState<"idle" | "success" | "error">("idle")
@@ -168,6 +180,7 @@ export function EditorShell() {
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const [showExamples, setShowExamples] = useState(false)
+  const [hydrated, setHydrated] = useState(false);
 
   const [splitRatio, setSplitRatio] = useState(50) // percentage for left panel
   const [isDragging, setIsDragging] = useState(false)
@@ -178,6 +191,10 @@ export function EditorShell() {
   const [validationResult, setValidationResult] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [lastValidatedXml, setLastValidatedXml] = useState<string>('');
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme")
@@ -249,6 +266,7 @@ export function EditorShell() {
     console.log("[v0] Initializing worker...")
     const w = new Worker(new URL("/workers/idsWorker.js", window.location.origin))
     workerRef.current = w
+
     w.onmessage = (e: MessageEvent<{ ok: boolean; xml?: string; readable?: any; errors?: string[] }>) => {
       console.log("[v0] Worker response:", e.data)
       if (!e.data.ok) {
@@ -263,13 +281,28 @@ export function EditorShell() {
         setReadable(e.data.readable || null)
       }
     }
-    console.log("[v0] Sending initial conversion...")
-    w.postMessage({ type: "convert", text: source })
+
     return () => {
-      w.terminate()
-      workerRef.current = null
+      if (workerRef.current) {
+        console.log("[v0] Terminating worker...")
+        workerRef.current.terminate()
+        workerRef.current = null
+      }
     }
-  }, [])
+  }, []) // Empty dependency array ensures this runs only on mount and unmount
+
+  useEffect(() => {
+    // This effect handles the initial conversion and any subsequent changes to the source.
+    if (source && workerRef.current) {
+      setStatus((s) => (s === "idle" ? "idle" : "processing"))
+      const t = setTimeout(() => {
+        setStatus("processing")
+        console.log("[v0] Sending conversion request...")
+        workerRef.current?.postMessage({ type: "convert", text: source })
+      }, 250)
+      return () => clearTimeout(t)
+    }
+  }, [source]) // It runs whenever the source code changes.
 
   useEffect(() => {
     localStorage.setItem("idsLightSource", source)
@@ -277,14 +310,13 @@ export function EditorShell() {
   }, [source])
 
   useEffect(() => {
-    setStatus((s) => (s === "idle" ? "idle" : "processing"))
-    const t = setTimeout(() => {
-      setStatus("processing")
-      console.log("[v0] Sending conversion request...")
-      workerRef.current?.postMessage({ type: "convert", text: source })
-    }, 250)
-    return () => clearTimeout(t)
-  }, [source])
+    if (xml) {
+      sessionStorage.setItem('idsLightXml', xml);
+    }
+    if (readable) {
+      sessionStorage.setItem('idsLightReadable', JSON.stringify(readable));
+    }
+  }, [xml, readable]);
 
   // Auto-validate when switching to validation tab
   useEffect(() => {
@@ -755,7 +787,13 @@ export function EditorShell() {
 
             <div className="flex-1 overflow-auto scrollbar-thin">
               <div className="p-4">
-                {errors.length > 0 && (
+                {!hydrated && (
+                  <div className="flex items-center justify-center h-full">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                )}
+
+                {hydrated && errors.length > 0 && (
                   <div className="mb-4 animate-in slide-in-from-top-2 duration-300">
                     <h3 className="text-sm font-medium text-destructive mb-2 flex items-center gap-2">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -779,7 +817,7 @@ export function EditorShell() {
                   </div>
                 )}
 
-                {outputView === "xml" && (
+                {hydrated && outputView === "xml" && (
                   <div className="animate-in fade-in duration-300 -m-4 h-[calc(100vh-200px)]">
                     <XmlViewer
                       xml={xml}
@@ -791,7 +829,7 @@ export function EditorShell() {
                   </div>
                 )}
 
-                {outputView === "readable" && readable && (
+                {hydrated && outputView === "readable" && readable && (
                   <div className="animate-in fade-in duration-300 h-full flex flex-col">
                     <h3 className="text-sm font-medium mb-4 text-foreground flex items-center gap-2 flex-shrink-0">
                       <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1006,7 +1044,7 @@ export function EditorShell() {
                   </div>
                 )}
 
-                {outputView === "validation" && (
+                {hydrated && outputView === "validation" && (
                   <div className="animate-in fade-in duration-300 h-full flex flex-col">
                     <h3 className="text-sm font-medium mb-2 text-foreground flex-shrink-0">Validation Results:</h3>
                     <div className="flex-1 overflow-auto scrollbar-thin">
@@ -1027,7 +1065,7 @@ export function EditorShell() {
                   </div>
                 )}
 
-                {!xml && !readable && status === "valid" && (
+                {hydrated && !xml && !readable && status === "valid" && (
                   <div className="text-muted-foreground text-sm flex items-center justify-center h-32">
                     No output generated yet.
                   </div>
