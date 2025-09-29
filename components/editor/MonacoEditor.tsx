@@ -66,10 +66,13 @@ interface MonacoEditorProps {
 }
 
 export function MonacoEditor({ value, onChange, placeholder, className }: MonacoEditorProps) {
-    const { theme } = useTheme();
+    const { theme, resolvedTheme } = useTheme();
     const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
     const monacoThemeRef = useRef<string | null>(null);
     const monacoApi = useMonaco();
+
+    // Determine the actual theme to use (system mode uses resolvedTheme)
+    const activeTheme = theme === 'system' ? resolvedTheme : theme;
 
     const handleBeforeMount = (monaco: typeof Monaco) => {
         // Register IDS-Light as a custom language
@@ -549,41 +552,44 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
             }
         });
 
-        // Custom theme for IDS-Light
+        // Custom theme for IDS-Light - Improved Dark Mode
         monaco.editor.defineTheme('ids-light-dark', {
             base: 'vs-dark',
             inherit: true,
             rules: [
-                { token: 'comment', foreground: '10B981', fontStyle: 'italic' }, // Green comments like docs
-                { token: 'key.root', foreground: '3B82F6', fontStyle: 'bold' }, // Blue root keys
-                { token: 'key.property', foreground: '3B82F6' }, // Blue property keys
-                { token: 'key.facet', foreground: '6366F1' }, // Indigo facet keys
-                { token: 'key', foreground: '3B82F6' }, // Blue general keys
-                { token: 'type.ifc', foreground: '818CF8' }, // Indigo IFC entities
-                { token: 'type.ifcRel', foreground: '818CF8' }, // Indigo IFC relationship enums
-                { token: 'type.ifcCode', foreground: '818CF8' }, // Indigo IFC codes like IFC4X3
-                { token: 'type.pset', foreground: '8B5CF6' }, // Purple property sets
-                { token: 'keyword.presence', foreground: '6366F1', fontStyle: 'bold' }, // Indigo presence
-                { token: 'string', foreground: 'F59E0B' }, // Amber strings
-                { token: 'constant.boolean', foreground: 'F59E0B' }, // Amber booleans
-                { token: 'number', foreground: '9CA3AF' }, // Muted gray numbers
-                { token: 'number.float', foreground: '9CA3AF' }, // Muted gray floats
-                { token: 'sequence.dash', foreground: 'A78BFA', fontStyle: 'bold' }, // Purple dash
-                { token: 'keyword', foreground: 'A3A3A3' }, // Other keywords muted
-                { token: 'delimiter', foreground: 'D1D5DB' }, // Gray for delimiters
-                { token: 'delimiter.bracket', foreground: 'D1D5DB' },
-                { token: 'delimiter.brace', foreground: 'D1D5DB' }
+                { token: 'comment', foreground: '34D399', fontStyle: 'italic' }, // Brighter green comments
+                { token: 'key.root', foreground: '60A5FA', fontStyle: 'bold' }, // Brighter blue root keys
+                { token: 'key.property', foreground: '60A5FA' }, // Brighter blue property keys
+                { token: 'key.facet', foreground: '8B5CF6' }, // Purple facet keys
+                { token: 'key', foreground: '60A5FA' }, // Brighter blue general keys
+                { token: 'type.ifc', foreground: '93C5FD' }, // Lighter indigo IFC entities
+                { token: 'type.ifcRel', foreground: '93C5FD' }, // Lighter indigo IFC relationship enums
+                { token: 'type.ifcCode', foreground: '93C5FD' }, // Lighter indigo IFC codes like IFC4X3
+                { token: 'type.pset', foreground: 'A78BFA' }, // Lighter purple property sets
+                { token: 'keyword.presence', foreground: '8B5CF6', fontStyle: 'bold' }, // Purple presence
+                { token: 'string', foreground: 'FCD34D' }, // Brighter amber strings
+                { token: 'constant.boolean', foreground: 'FCD34D' }, // Brighter amber booleans
+                { token: 'number', foreground: 'D1D5DB' }, // Lighter gray numbers
+                { token: 'number.float', foreground: 'D1D5DB' }, // Lighter gray floats
+                { token: 'sequence.dash', foreground: 'C084FC', fontStyle: 'bold' }, // Brighter purple dash
+                { token: 'keyword', foreground: 'CBD5E1' }, // Lighter keywords
+                { token: 'delimiter', foreground: '94A3B8' }, // Lighter gray for delimiters
+                { token: 'delimiter.bracket', foreground: '94A3B8' },
+                { token: 'delimiter.brace', foreground: '94A3B8' }
             ],
             colors: {
                 'editor.background': '#0F172A',
-                'editor.foreground': '#E2E8F0',
-                'editorLineNumber.foreground': '#475569',
-                'editorLineNumber.activeForeground': '#94A3B8',
+                'editor.foreground': '#F1F5F9',
+                'editorLineNumber.foreground': '#64748B',
+                'editorLineNumber.activeForeground': '#CBD5E1',
                 'editor.selectionBackground': '#334155',
                 'editor.selectionHighlightBackground': '#1E293B',
-                'editorCursor.foreground': '#F8FAFC',
+                'editorCursor.foreground': '#FFFFFF',
                 'editor.findMatchBackground': '#374151',
-                'editor.findMatchHighlightBackground': '#1F2937'
+                'editor.findMatchHighlightBackground': '#1F2937',
+                'editor.lineHighlightBackground': '#1E293B',
+                'editorLineNumber.background': '#0F172A',
+                'editorGutter.background': '#0F172A'
             }
         });
 
@@ -626,7 +632,7 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
 
         // Ensure the custom theme is applied after definition
         try {
-            const selected = theme === 'dark' ? 'ids-light-dark' : 'ids-light-light';
+            const selected = activeTheme === 'dark' ? 'ids-light-dark' : 'ids-light-light';
             monaco.editor.setTheme(selected);
             monacoThemeRef.current = selected;
         } catch (e) {
@@ -639,7 +645,7 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
         editorRef.current = editor;
 
         // Apply theme
-        const selected = theme === 'dark' ? 'ids-light-dark' : 'ids-light-light';
+        const selected = activeTheme === 'dark' ? 'ids-light-dark' : 'ids-light-light';
         try {
             monaco.editor.setTheme(selected);
             monacoThemeRef.current = selected;
@@ -706,7 +712,7 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
 
     // Re-apply Monaco theme when Next theme changes
     useEffect(() => {
-        const selected = theme === 'dark' ? 'ids-light-dark' : 'ids-light-light';
+        const selected = activeTheme === 'dark' ? 'ids-light-dark' : 'ids-light-light';
         if (monacoApi && monacoThemeRef.current !== selected) {
             try {
                 monacoApi.editor.setTheme(selected);
@@ -715,7 +721,7 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
                 // ignore
             }
         }
-    }, [theme, monacoApi]);
+    }, [activeTheme, monacoApi]);
 
     const handleEditorChange = (newValue: string | undefined) => {
         if (newValue !== undefined) {
@@ -724,11 +730,11 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
     };
 
     return (
-        <div className={className}>
+        <div className={className} style={{ backgroundColor: activeTheme === 'dark' ? '#0F172A' : '#FFFFFF' }}>
             <Editor
                 height="100%"
                 language={IDS_LIGHT_LANGUAGE_ID}
-                theme={theme === 'dark' ? 'ids-light-dark' : 'ids-light-light'}
+                theme={activeTheme === 'dark' ? 'ids-light-dark' : 'ids-light-light'}
                 value={value}
                 onChange={handleEditorChange}
                 beforeMount={handleBeforeMount}

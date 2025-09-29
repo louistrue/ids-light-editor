@@ -182,13 +182,47 @@
   }
 }
 
-/* Added Tokyo Night syntax highlighting colors for code areas */
+/* Prevent layout shift on code blocks and long lines */
+.docs pre {
+  max-width: 100%;
+  overflow: auto;
+  white-space: pre;
+}
+
+/* Make inline code blocks wrap nicely inside paragraphs */
+.docs code {
+  word-break: break-word;
+}
+
+/* Tables: enable horizontal scroll if overflow */
+.docs table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* Cards and sections: avoid overflow clipping rounded borders */
+.docs .rounded,
+.docs .rounded-lg,
+.docs .rounded-md {
+  overflow: hidden;
+}
+
+/* Improve readability of long YAML comments on small screens */
+@media (max-width: 640px) {
+  .docs pre {
+    font-size: 11px;
+    line-height: 1.4;
+  }
+}
+
+/* Monaco Editor styling - Let Monaco handle its own theme colors */
 .dark .monaco-editor-background {
-  background-color: hsl(var(--background)) !important;
+  background-color: #0F172A !important;
 }
 
 .dark .monaco-editor {
-  --vscode-editor-background: hsl(var(--background));
-  --vscode-editor-foreground: hsl(var(--foreground));
-  --vscode-editorLineNumber-foreground: hsl(var(--muted-foreground));
+  --vscode-editor-background: #0F172A;
+  --vscode-editor-foreground: #F1F5F9;
+  --vscode-editorLineNumber-foreground: #64748B;
 }
