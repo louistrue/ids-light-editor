@@ -111,11 +111,11 @@ export function XmlViewer({ xml, onCopy, onDownload, copyStatus = 'idle', downlo
 
             return (
                 <div key={index} className="flex hover:bg-muted/30 transition-colors">
-                    <span className="text-gray-400 text-xs mr-4 select-none w-8 text-right flex-shrink-0 py-0.5">
+                    <span className="text-muted-foreground text-xs mr-4 select-none w-8 text-right flex-shrink-0 py-0.5">
                         {lineNumber}
                     </span>
                     <span
-                        className="flex-1 min-w-0 py-0.5 leading-relaxed font-mono"
+                        className="flex-1 min-w-0 py-0.5 leading-relaxed font-mono text-foreground"
                         dangerouslySetInnerHTML={{ __html: highlightedLine }}
                     />
                 </div>
@@ -295,7 +295,7 @@ export function XmlViewer({ xml, onCopy, onDownload, copyStatus = 'idle', downlo
                                     <div className="space-y-0">
                                         {xml.split('\n').map((line, index) => (
                                             <div key={index} className="flex hover:bg-muted/30 transition-colors">
-                                                <span className="text-gray-400 text-xs mr-4 select-none w-8 text-right flex-shrink-0 py-0.5">
+                                                <span className="text-muted-foreground text-xs mr-4 select-none w-8 text-right flex-shrink-0 py-0.5">
                                                     {index + 1}
                                                 </span>
                                                 <span className="flex-1 min-w-0 py-0.5 leading-relaxed font-mono text-foreground whitespace-pre-wrap break-all">
@@ -307,8 +307,8 @@ export function XmlViewer({ xml, onCopy, onDownload, copyStatus = 'idle', downlo
                                 )}
                             </div>
                         ) : (
-                            <pre className="p-4 text-xs leading-relaxed overflow-x-auto">
-                                <code>{xml}</code>
+                            <pre className="p-4 text-xs leading-relaxed overflow-x-auto text-foreground">
+                                <code className="text-foreground">{xml}</code>
                             </pre>
                         )}
                     </div>

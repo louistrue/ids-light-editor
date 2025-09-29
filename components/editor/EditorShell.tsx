@@ -3,7 +3,10 @@
 import type React from "react"
 
 import { useEffect, useRef, useState, useCallback } from "react"
-import { Loader2 } from 'lucide-react';
+import { Loader2, Github } from 'lucide-react';
+import { EditorPane } from "./EditorPane";
+import { XmlViewer } from "./XmlViewer";
+import { ThemeToggle } from "../theme-toggle";
 
 type ConvertStatus = "idle" | "processing" | "valid" | "invalid"
 
@@ -184,6 +187,7 @@ export function EditorShell() {
   const containerRef = useRef<HTMLDivElement>(null)
 
   const workerRef = useRef<Worker | null>(null)
+  const workerInitializedRef = useRef<boolean>(false)
 
   const [validationResult, setValidationResult] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
@@ -240,12 +244,18 @@ export function EditorShell() {
   }, [xml, showShortcuts])
 
   useEffect(() => {
+    // Prevent multiple worker initializations
+    if (workerInitializedRef.current) {
+      return
+    }
+
     if (process.env.NODE_ENV !== 'production') {
       console.log("Initializing worker...")
     }
     const prefix = (window as any).__NEXT_DATA__?.assetPrefix ?? process.env.NEXT_PUBLIC_BASE_PATH ?? '';
     const w = new Worker(`${prefix}/workers/idsWorker.js`, { type: 'module' });
     workerRef.current = w
+    workerInitializedRef.current = true
 
     w.onmessage = (e: MessageEvent<{ ok: boolean; xml?: string; readable?: any; errors?: string[] }>) => {
       if (process.env.NODE_ENV !== 'production') {
@@ -271,6 +281,7 @@ export function EditorShell() {
         }
         workerRef.current.terminate()
         workerRef.current = null
+        workerInitializedRef.current = false
       }
     }
   }, []) // Empty dependency array ensures this runs only on mount and unmount
