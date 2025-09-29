@@ -44,7 +44,9 @@ const PROPERTY_KEYS = [
 const DATA_TYPES = [
     'string', 'integer', 'number', 'boolean', 'date', 'time', 'datetime',
     'duration', 'anyURI', 'base64Binary', 'hexBinary', 'normalizedString',
-    'token', 'language', 'NMTOKEN', 'Name', 'NCName', 'ID', 'IDREF', 'ENTITY'
+    'token', 'language', 'NMTOKEN', 'Name', 'NCName', 'ID', 'IDREF', 'ENTITY',
+    'length', 'area', 'volume', 'count', 'thermaltransmittance', 'volumetricflowrate',
+    'power', 'electricvoltage'
 ];
 
 // Presence values
@@ -63,6 +65,7 @@ interface MonacoEditorProps {
 export function MonacoEditor({ value, onChange, placeholder, className }: MonacoEditorProps) {
     const { theme } = useTheme();
     const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+    const monacoThemeRef = useRef<string | null>(null);
 
     const handleEditorDidMount = (editor: monaco.editor.IStandaloneCodeEditor, monaco: typeof import('monaco-editor')) => {
         editorRef.current = editor;
@@ -114,7 +117,12 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
                     [/^(\s*)(ids|rules|title|description|version|author|date|purpose|milestone|copyright|license)(\s*)(:)/,
                         ['', 'key.root', '', 'delimiter']],
 
+                    // YAML array dash at the start of a sequence item
+                    [/^(\s*)(-)(\s+)/, ['', 'sequence.dash', '']],
+
                     // IFC entities (IfcWall, IfcDoor, etc.)
+                    [/\bIFCREL[A-Z_]+\b/, 'type.ifcRel'],
+                    [/\bIFC[0-9X_]+\b/, 'type.ifcCode'],
                     [/\bIfc[A-Z][a-zA-Z]*\b/, 'type.ifc'],
 
                     // Property sets (Pset_Common, etc.)
@@ -127,6 +135,9 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
                     // Property keys (name, datatype, presence, etc.)
                     [/^(\s*)(name|datatype|presence|value|minValue|maxValue|pattern|length|minLength|maxLength|enumeration|uri|instructions|cardinality|minCardinality|maxCardinality)(\s*)(:)/,
                         ['', 'key.property', '', 'delimiter']],
+
+                    // Presence keywords in values
+                    [/\b(required|optional|prohibited)\b/, 'keyword.presence'],
 
                     // General keys
                     [/^(\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*)(:)/, ['', 'key', '', 'delimiter']],
@@ -142,7 +153,7 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
                     [/-?\d+/, 'number'],
 
                     // Booleans
-                    [/\b(true|false|yes|no|on|off)\b/, 'keyword'],
+                    [/\b(true|false|yes|no|on|off)\b/, 'constant.boolean'],
 
                     // Null
                     [/\b(null|~)\b/, 'keyword'],
@@ -564,17 +575,22 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
             base: 'vs-dark',
             inherit: true,
             rules: [
-                { token: 'comment', foreground: '6A737D', fontStyle: 'italic' },
-                { token: 'key.root', foreground: 'A855F7', fontStyle: 'bold' }, // Purple for root keys
-                { token: 'key.property', foreground: '3B82F6' }, // Blue for property keys
-                { token: 'key.facet', foreground: '6366F1' }, // Indigo for facet keys
-                { token: 'key', foreground: '8B5CF6' }, // Purple for general keys
-                { token: 'type.ifc', foreground: 'F97316' }, // Orange for IFC entities
-                { token: 'type.pset', foreground: '06B6D4' }, // Cyan for property sets
-                { token: 'string', foreground: '10B981' }, // Green for strings
-                { token: 'number', foreground: 'EF4444' }, // Red for numbers
-                { token: 'number.float', foreground: 'EF4444' }, // Red for floats
-                { token: 'keyword', foreground: 'F59E0B' }, // Yellow for booleans/keywords
+                { token: 'comment', foreground: '10B981', fontStyle: 'italic' }, // Green comments like docs
+                { token: 'key.root', foreground: '3B82F6', fontStyle: 'bold' }, // Blue root keys
+                { token: 'key.property', foreground: '3B82F6' }, // Blue property keys
+                { token: 'key.facet', foreground: '6366F1' }, // Indigo facet keys
+                { token: 'key', foreground: '3B82F6' }, // Blue general keys
+                { token: 'type.ifc', foreground: '818CF8' }, // Indigo IFC entities
+                { token: 'type.ifcRel', foreground: '818CF8' }, // Indigo IFC relationship enums
+                { token: 'type.ifcCode', foreground: '818CF8' }, // Indigo IFC codes like IFC4X3
+                { token: 'type.pset', foreground: '8B5CF6' }, // Purple property sets
+                { token: 'keyword.presence', foreground: '6366F1', fontStyle: 'bold' }, // Indigo presence
+                { token: 'string', foreground: 'F59E0B' }, // Amber strings
+                { token: 'constant.boolean', foreground: 'F59E0B' }, // Amber booleans
+                { token: 'number', foreground: '9CA3AF' }, // Muted gray numbers
+                { token: 'number.float', foreground: '9CA3AF' }, // Muted gray floats
+                { token: 'sequence.dash', foreground: 'A78BFA', fontStyle: 'bold' }, // Purple dash
+                { token: 'keyword', foreground: 'A3A3A3' }, // Other keywords muted
                 { token: 'delimiter', foreground: 'D1D5DB' }, // Gray for delimiters
                 { token: 'delimiter.bracket', foreground: 'D1D5DB' },
                 { token: 'delimiter.brace', foreground: 'D1D5DB' }
@@ -596,17 +612,22 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
             base: 'vs',
             inherit: true,
             rules: [
-                { token: 'comment', foreground: '6B7280', fontStyle: 'italic' },
-                { token: 'key.root', foreground: '7C3AED', fontStyle: 'bold' }, // Purple for root keys
-                { token: 'key.property', foreground: '2563EB' }, // Blue for property keys
-                { token: 'key.facet', foreground: '4F46E5' }, // Indigo for facet keys
-                { token: 'key', foreground: '7C2D12' }, // Brown for general keys
-                { token: 'type.ifc', foreground: 'EA580C' }, // Orange for IFC entities
-                { token: 'type.pset', foreground: '0891B2' }, // Cyan for property sets
-                { token: 'string', foreground: '059669' }, // Green for strings
-                { token: 'number', foreground: 'DC2626' }, // Red for numbers
-                { token: 'number.float', foreground: 'DC2626' }, // Red for floats
-                { token: 'keyword', foreground: 'D97706' }, // Amber for booleans/keywords
+                { token: 'comment', foreground: '059669', fontStyle: 'italic' }, // Green comments
+                { token: 'key.root', foreground: '2563EB', fontStyle: 'bold' }, // Blue root keys
+                { token: 'key.property', foreground: '2563EB' }, // Blue property keys
+                { token: 'key.facet', foreground: '4F46E5' }, // Indigo facet keys
+                { token: 'key', foreground: '2563EB' }, // Blue general keys
+                { token: 'type.ifc', foreground: '4F46E5' }, // Indigo IFC entities
+                { token: 'type.ifcRel', foreground: '4F46E5' },
+                { token: 'type.ifcCode', foreground: '4F46E5' },
+                { token: 'type.pset', foreground: '7C3AED' }, // Purple property sets
+                { token: 'keyword.presence', foreground: '4F46E5', fontStyle: 'bold' },
+                { token: 'string', foreground: 'D97706' }, // Amber strings
+                { token: 'constant.boolean', foreground: 'D97706' }, // Amber booleans
+                { token: 'number', foreground: '6B7280' }, // Muted gray numbers
+                { token: 'number.float', foreground: '6B7280' },
+                { token: 'sequence.dash', foreground: '8B5CF6', fontStyle: 'bold' },
+                { token: 'keyword', foreground: '6B7280' },
                 { token: 'delimiter', foreground: '4B5563' }, // Gray for delimiters
                 { token: 'delimiter.bracket', foreground: '4B5563' },
                 { token: 'delimiter.brace', foreground: '4B5563' }
@@ -624,12 +645,36 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
             }
         });
 
+        // Ensure the custom theme is applied after definition
+        try {
+            const selected = theme === 'dark' ? 'ids-light-dark' : 'ids-light-light';
+            monaco.editor.setTheme(selected);
+            monacoThemeRef.current = selected;
+        } catch (e) {
+            // no-op if theme not ready
+        }
+
         // Set placeholder text if value is empty
         if (!value && placeholder) {
             editor.setValue(placeholder);
             editor.setSelection(new monaco.Selection(1, 1, 1, 1));
         }
     };
+
+    // Re-apply Monaco theme when Next theme changes
+    useEffect(() => {
+        if (editorRef.current) {
+            const selected = theme === 'dark' ? 'ids-light-dark' : 'ids-light-light';
+            if (monacoThemeRef.current !== selected) {
+                try {
+                    monaco.editor.setTheme(selected);
+                    monacoThemeRef.current = selected;
+                } catch (e) {
+                    // ignore
+                }
+            }
+        }
+    }, [theme]);
 
     const handleEditorChange = (newValue: string | undefined) => {
         if (newValue !== undefined) {
@@ -741,11 +786,15 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
                     formatOnType: true,
 
                     // Rendering options
-                    renderControlCharacters: false,
+                    renderControlCharacters: true,
                     renderFinalNewline: 'on',
                     renderValidationDecorations: 'editable',
                     renderWhitespace: 'selection',
                     renderLineHighlightOnlyWhenFocus: false,
+                    unicodeHighlight: {
+                        invisibleCharacters: false,
+                        ambiguousCharacters: false
+                    },
 
                     // Scrolling and navigation
                     smoothScrolling: true,

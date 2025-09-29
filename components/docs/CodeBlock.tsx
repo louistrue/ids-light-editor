@@ -6,7 +6,7 @@ import { Copy, Check } from "lucide-react"
 
 interface HighlightLine {
   line: string
-  color: 'blue' | 'green' | 'amber' | 'purple' | 'red'
+  color: 'blue' | 'green' | 'amber' | 'purple' | 'red' | 'teal'
 }
 
 interface CodeBlockProps {
@@ -41,7 +41,7 @@ export function CodeBlock({ code, language = "yaml", title, showCopy = true, hig
       .split('\n')
       .map((line, index) => {
         const lineNumber = index + 1
-        const isHighlighted = highlight.includes(lineNumber.toString())
+        const isHighlighted = highlight.some(h => h.line === lineNumber.toString())
 
         // Parse YAML line into segments
         const segments: Array<{ text: string; className?: string }> = []
@@ -150,21 +150,22 @@ export function CodeBlock({ code, language = "yaml", title, showCopy = true, hig
           green: 'bg-green-100 dark:bg-green-900/20 border-l-2 border-green-400',
           amber: 'bg-amber-100 dark:bg-amber-900/20 border-l-2 border-amber-400',
           purple: 'bg-purple-100 dark:bg-purple-900/20 border-l-2 border-purple-400',
-          red: 'bg-red-100 dark:bg-red-900/20 border-l-2 border-red-400'
+          red: 'bg-red-100 dark:bg-red-900/20 border-l-2 border-red-400',
+          teal: 'bg-teal-100 dark:bg-teal-900/20 border-l-2 border-teal-400'
         }
 
         return (
           <div
             key={index}
-            className={`flex ${highlightInfo
+            className={`flex h-[1.5em] ${highlightInfo
               ? `${highlightColorClasses[highlightInfo.color]} -mx-2 px-2 py-0.5`
-              : ''
+              : 'bg-transparent'
               }`}
           >
             <span className="text-gray-400 text-xs mr-3 select-none w-6 text-right flex-shrink-0">
               {lineNumber}
             </span>
-            <span className="flex-1 min-w-0">
+            <span className="flex-1 min-w-0 h-[1.5em] flex items-center">
               {segments.map((segment, segIndex) => (
                 <span
                   key={segIndex}
@@ -207,7 +208,7 @@ export function CodeBlock({ code, language = "yaml", title, showCopy = true, hig
           {/* Highlight overlay for specific lines */}
           {highlight.length > 0 && (
             <div className="absolute inset-0 pointer-events-none">
-              <div className="p-4 text-xs leading-relaxed">
+              <div className="p-4 text-xs leading-normal">
                 {code.split('\n').map((line, index) => {
                   const lineNumber = index + 1
                   const highlightInfo = highlight.find(h => h.line === lineNumber.toString())
@@ -216,14 +217,15 @@ export function CodeBlock({ code, language = "yaml", title, showCopy = true, hig
                     green: 'bg-green-100 dark:bg-green-900/20 border-l-2 border-green-400',
                     amber: 'bg-amber-100 dark:bg-amber-900/20 border-l-2 border-amber-400',
                     purple: 'bg-purple-100 dark:bg-purple-900/20 border-l-2 border-purple-400',
-                    red: 'bg-red-100 dark:bg-red-900/20 border-l-2 border-red-400'
+                    red: 'bg-red-100 dark:bg-red-900/20 border-l-2 border-red-400',
+                    teal: 'bg-teal-100 dark:bg-teal-900/20 border-l-2 border-teal-400'
                   }
                   return (
                     <div
                       key={index}
                       className={`flex h-[1.5em] ${highlightInfo
                         ? `${highlightColorClasses[highlightInfo.color]} -mx-2 px-2`
-                        : ''
+                        : 'bg-transparent'
                         }`}
                     >
                       <span className="w-6 mr-3 flex-shrink-0"></span>
@@ -239,14 +241,14 @@ export function CodeBlock({ code, language = "yaml", title, showCopy = true, hig
           <div className="relative z-10">
             <pre className="p-4 text-xs leading-relaxed overflow-x-auto scrollbar-thin">
               <code className="block">
-                <div className="space-y-0">
+                <div className="leading-normal">
                   {isClient && language === 'yaml' ? highlightYaml(code) : (
                     code.split('\n').map((line, index) => (
-                      <div key={index} className="flex">
+                      <div key={index} className="flex h-[1.5em]">
                         <span className="text-gray-400 text-xs mr-3 select-none w-6 text-right flex-shrink-0">
                           {index + 1}
                         </span>
-                        <span className="flex-1 min-w-0">
+                        <span className="flex-1 min-w-0 h-[1.5em] flex items-center">
                           {line}
                         </span>
                       </div>

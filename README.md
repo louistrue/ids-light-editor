@@ -51,7 +51,7 @@ Door FireRating:
 ids:
   ifcVersion: "IFC4"
   rules:
-    - name: "IfcDoor – FireRating required"
+    - name: "IfcDoor - FireRating required"
       entity: "IfcDoor"
       properties:
         - name: "Pset_DoorCommon.FireRating"
@@ -64,7 +64,7 @@ Space Name + Area:
 ids:
   ifcVersion: "IFC4"
   rules:
-    - name: "IfcSpace – Name and Area"
+    - name: "IfcSpace - Name and Area"
       entity: "IfcSpace"
       attributes:
         - name: "Name"
@@ -81,7 +81,7 @@ Wall Width:
 ids:
   ifcVersion: "IFC4"
   rules:
-    - name: "IfcWall – Width required"
+    - name: "IfcWall - Width required"
       entity: "IfcWall"
       quantities:
         - name: "Qto_WallBaseQuantities.Width"

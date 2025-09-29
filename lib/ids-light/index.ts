@@ -303,9 +303,18 @@ export function convertIdsLightToXml(data: IdsLight, opts: ConvertOptions = {}):
   const specs = root.ele("ids:specifications")
 
   for (const rule of data.ids.rules || []) {
+    // Normalize legacy `classification` into `classifications` array
+    if (rule.classification) {
+      if (!rule.classifications) {
+        rule.classifications = []
+      }
+      rule.classifications.push(rule.classification)
+    }
+
     const spec = specs.ele("ids:specification", {
       name: rule.name ?? rule.entity,
       ifcVersion: data.ids.ifcVersion,
+      description: "Generated from IDS-Light",
     })
 
     // ---- Applicability
@@ -328,8 +337,8 @@ export function convertIdsLightToXml(data: IdsLight, opts: ConvertOptions = {}):
     // Add classification constraints
     for (const classification of rule.classifications || []) {
       const classNode = appl.ele("ids:classification")
-      idsSimple(classNode, "ids:system", classification.system)
       if (classification.value) idsSimple(classNode, "ids:value", classification.value)
+      idsSimple(classNode, "ids:system", classification.system)
     }
 
     // Add material constraints
@@ -339,7 +348,7 @@ export function convertIdsLightToXml(data: IdsLight, opts: ConvertOptions = {}):
     }
 
     // ---- Requirements
-    const reqs = spec.ele("ids:requirements", { description: "Generated from IDS-Light" })
+    const reqs = spec.ele("ids:requirements")
 
     // Required partOf relationships
     for (const partOf of rule.requiredPartOf || []) {
@@ -363,7 +372,10 @@ export function convertIdsLightToXml(data: IdsLight, opts: ConvertOptions = {}):
       if (classification.instructions) classNode.att("instructions", classification.instructions)
 
       idsSimple(classNode, "ids:system", classification.system)
-      if (classification.value) idsSimple(classNode, "ids:value", classification.value)
+      if (classification.value) {
+        // According to IDS schema, required classifications can have a value facet
+        idsSimple(classNode, "ids:value", classification.value)
+      }
     }
 
     // Required materials
@@ -438,11 +450,14 @@ function splitPropertyName(full: string): { pset: string; base: string } {
 
 // Map simple datatypes → IFC defined types
 function toIfcType(datatype: SimpleDatatype | undefined, base: string): string {
+  // Handle special cases where property name implies datatype
+  if (base.toLowerCase().includes("thermaltransmittance")) {
+    return "IFCTHERMALTRANSMITTANCEMEASURE"
+  }
+
   if (!datatype) return "IFCLABEL"
   switch (datatype) {
     case "string":
-      // Special cases for specific properties
-      if (base.toLowerCase().includes("thermaltransmittance")) return "IFCTHERMALTRANSMITTANCEMEASURE"
       return "IFCLABEL"
     case "boolean":
       return "IFCBOOLEAN"

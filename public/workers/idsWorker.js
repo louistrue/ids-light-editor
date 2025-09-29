@@ -2,12 +2,12 @@
 // This worker handles parsing, validation, and XML conversion without external dependencies
 
 function parseYAML(yamlStr) {
-  console.log("[v0] === YAML PARSING START ===")
-  console.log("[v0] Input YAML:", yamlStr)
-  console.log("[v0] Input length:", yamlStr.length)
+  console.log("=== YAML PARSING START ===")
+  console.log("Input YAML:", yamlStr)
+  console.log("Input length:", yamlStr.length)
 
   const lines = yamlStr.split("\n")
-  console.log("[v0] Total lines:", lines.length)
+  console.log("Total lines:", lines.length)
 
   const result = { ids: { ifcVersion: "IFC4", rules: [] } }
   const parseErrors = []
@@ -22,10 +22,10 @@ function parseYAML(yamlStr) {
     const line = lines[i]
     const trimmed = line.trim()
 
-    console.log(`[v0] Line ${i + 1}: "${line}" (trimmed: "${trimmed}")`)
+    console.log(`Line ${i + 1}: "${line}" (trimmed: "${trimmed}")`)
 
     if (!trimmed || trimmed.startsWith("#")) {
-      console.log("[v0] Skipping empty/comment line")
+      console.log("Skipping empty/comment line")
       continue
     }
 
@@ -33,30 +33,30 @@ function parseYAML(yamlStr) {
 
     // Root level properties
     if (trimmed.startsWith("ids:")) {
-      console.log("[v0] Found ids: marker")
+      console.log("Found ids: marker")
       lineParsed = true
     } else if (trimmed.startsWith("title:")) {
       result.ids.title = extractValue(trimmed)
-      console.log("[v0] Set title:", result.ids.title)
+      console.log("Set title:", result.ids.title)
       lineParsed = true
     } else if (trimmed.startsWith("description:")) {
       result.ids.description = extractValue(trimmed)
-      console.log("[v0] Set description:", result.ids.description)
+      console.log("Set description:", result.ids.description)
       lineParsed = true
     } else if (trimmed.startsWith("author:")) {
       result.ids.author = extractValue(trimmed)
-      console.log("[v0] Set author:", result.ids.author)
+      console.log("Set author:", result.ids.author)
       lineParsed = true
     } else if (trimmed.startsWith("date:")) {
       result.ids.date = extractValue(trimmed)
-      console.log("[v0] Set date:", result.ids.date)
+      console.log("Set date:", result.ids.date)
       lineParsed = true
     } else if (trimmed.startsWith("ifcVersion:")) {
       result.ids.ifcVersion = extractValue(trimmed)
-      console.log("[v0] Set ifcVersion:", result.ids.ifcVersion)
+      console.log("Set ifcVersion:", result.ids.ifcVersion)
       lineParsed = true
     } else if (trimmed.startsWith("rules:")) {
-      console.log("[v0] Entering rules section")
+      console.log("Entering rules section")
       inRulesSection = true
       lineParsed = true
     } else if (inRulesSection) {
@@ -64,7 +64,7 @@ function parseYAML(yamlStr) {
 
       // New rule - starts with "- " at the rules level (typically 4 spaces indentation)
       if (trimmed.startsWith("- ") && indentLevel <= 4) {
-        console.log("[v0] Found new rule marker")
+        console.log("Found new rule marker")
         currentRule = {}
         result.ids.rules.push(currentRule)
         currentSection = null // Reset section when starting new rule
@@ -76,7 +76,7 @@ function parseYAML(yamlStr) {
           const fieldName = afterDash.split(":")[0].trim()
           const fieldValue = extractValue(afterDash)
           currentRule[fieldName] = fieldValue
-          console.log(`[v0] Set ${fieldName} for new rule:`, fieldValue)
+          console.log(`Set ${fieldName} for new rule:`, fieldValue)
         }
         lineParsed = true
       }
@@ -89,13 +89,13 @@ function parseYAML(yamlStr) {
         if (fieldName === "attributes" || fieldName === "properties" || fieldName === "quantities" ||
           fieldName === "requiredPartOf" || fieldName === "partOf" || fieldName === "classifications" ||
           fieldName === "materials" || fieldName === "requiredClassifications" || fieldName === "requiredMaterials") {
-          console.log(`[v0] Starting ${fieldName} section`)
+          console.log(`Starting ${fieldName} section`)
           currentSection = fieldName
           currentRule[fieldName] = []
           currentItem = null
           lineParsed = true
         } else if (currentSection && currentItem) {
-          console.log(`[v0] Setting ${fieldName} for current ${currentSection} item:`, fieldValue)
+          console.log(`Setting ${fieldName} for current ${currentSection} item:`, fieldValue)
 
           if (fieldName === "allowed_values") {
             // Parse array values
@@ -111,7 +111,7 @@ function parseYAML(yamlStr) {
                   return trimmedV
                 })
               currentItem.allowed_values = values
-              console.log("[v0] Set allowed_values:", values)
+              console.log("Set allowed_values:", values)
             }
           } else {
             currentItem[fieldName] = fieldValue
@@ -120,20 +120,20 @@ function parseYAML(yamlStr) {
         } else {
           // Regular rule field (entity, name, etc.)
           currentRule[fieldName] = fieldValue
-          console.log(`[v0] Set ${fieldName} for current rule:`, fieldValue)
+          console.log(`Set ${fieldName} for current rule:`, fieldValue)
           lineParsed = true
         }
       }
       // Section items - start with "- " when we're in a section (typically 8+ spaces indentation)
       else if (currentSection && trimmed.startsWith("- ") && indentLevel > 4) {
-        console.log(`[v0] Found new item in ${currentSection} section`)
+        console.log(`Found new item in ${currentSection} section`)
         const afterDash = trimmed.substring(2).trim()
         if (afterDash.includes(":")) {
           const fieldName = afterDash.split(":")[0].trim()
           const fieldValue = extractValue(afterDash)
           currentItem = { [fieldName]: fieldValue }
           currentRule[currentSection].push(currentItem)
-          console.log(`[v0] Created new ${currentSection} item with ${fieldName}:`, fieldValue)
+          console.log(`Created new ${currentSection} item with ${fieldName}:`, fieldValue)
           lineParsed = true
         } else {
           // Item without immediate field, just create empty item
@@ -146,7 +146,7 @@ function parseYAML(yamlStr) {
 
     if (!lineParsed) {
       unparsedLines.push({ lineNumber: i + 1, content: line })
-      console.log(`[v0] WARNING: Unparsed line ${i + 1}: "${line}"`)
+      console.log(`WARNING: Unparsed line ${i + 1}: "${line}"`)
     }
   }
 
@@ -156,9 +156,9 @@ function parseYAML(yamlStr) {
     )
   }
 
-  console.log("[v0] === YAML PARSING COMPLETE ===")
-  console.log("[v0] Final parsed result:", JSON.stringify(result, null, 2))
-  console.log("[v0] Parse errors:", parseErrors)
+  console.log("=== YAML PARSING COMPLETE ===")
+  console.log("Final parsed result:", JSON.stringify(result, null, 2))
+  console.log("Parse errors:", parseErrors)
 
   if (parseErrors.length > 0) {
     throw new Error(parseErrors.join("; "))
@@ -172,6 +172,12 @@ function extractValue(line) {
   if (colonIndex === -1) return ""
 
   let value = line.substring(colonIndex + 1).trim()
+
+  // Remove inline comments (everything after #)
+  const commentIndex = value.indexOf("#")
+  if (commentIndex !== -1) {
+    value = value.substring(0, commentIndex).trim()
+  }
 
   // Remove quotes
   if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
@@ -200,7 +206,7 @@ function parseIdsLight(text) {
 }
 
 function validateIdsLight(data) {
-  console.log("[v0] Validating data:", JSON.stringify(data, null, 2))
+  console.log("Validating data:", JSON.stringify(data, null, 2))
 
   if (!data || !data.ids) {
     return { valid: false, errors: ["Missing root 'ids' object"] }
@@ -227,7 +233,7 @@ function validateIdsLight(data) {
 
   for (let i = 0; i < data.ids.rules.length; i++) {
     const rule = data.ids.rules[i]
-    console.log("[v0] Validating rule", i + 1, ":", JSON.stringify(rule, null, 2))
+    console.log("Validating rule", i + 1, ":", JSON.stringify(rule, null, 2))
 
     if (!rule.entity) {
       return { valid: false, errors: [`Rule ${i + 1}: Missing 'entity' field`] }
@@ -244,25 +250,30 @@ function validateIdsLight(data) {
       }
     }
 
-    console.log("[v0] Checking requirements for rule", i + 1)
-    console.log("[v0] rule.properties:", rule.properties)
-    console.log("[v0] rule.attributes:", rule.attributes)
-    console.log("[v0] rule.quantities:", rule.quantities)
-    console.log("[v0] properties length:", rule.properties ? rule.properties.length : "undefined")
-    console.log("[v0] attributes length:", rule.attributes ? rule.attributes.length : "undefined")
-    console.log("[v0] quantities length:", rule.quantities ? rule.quantities.length : "undefined")
+    console.log("Checking requirements for rule", i + 1)
+    console.log("rule.properties:", rule.properties)
+    console.log("rule.attributes:", rule.attributes)
+    console.log("rule.quantities:", rule.quantities)
+    console.log("properties length:", rule.properties ? rule.properties.length : "undefined")
+    console.log("attributes length:", rule.attributes ? rule.attributes.length : "undefined")
+    console.log("quantities length:", rule.quantities ? rule.quantities.length : "undefined")
 
     const hasRequirements =
       (rule.properties && rule.properties.length > 0) ||
       (rule.attributes && rule.attributes.length > 0) ||
-      (rule.quantities && rule.quantities.length > 0)
+      (rule.quantities && rule.quantities.length > 0) ||
+      (rule.requiredPartOf && rule.requiredPartOf.length > 0) ||
+      (rule.requiredClassifications && rule.requiredClassifications.length > 0) ||
+      (rule.requiredMaterials && rule.requiredMaterials.length > 0)
 
-    console.log("[v0] hasRequirements:", hasRequirements)
+    console.log("hasRequirements:", hasRequirements)
 
     if (!hasRequirements) {
       return {
         valid: false,
-        errors: [`Rule ${i + 1}: Must have at least one property, attribute, or quantity requirement`],
+        errors: [
+          `Rule ${i + 1}: Must have at least one requirement among properties, attributes, quantities, requiredPartOf, requiredClassifications, or requiredMaterials`,
+        ],
       }
     }
 
@@ -286,6 +297,32 @@ function validateIdsLight(data) {
         }
       }
     }
+
+    // Minimal schema checks for new required facets
+    if (rule.requiredPartOf) {
+      for (let j = 0; j < rule.requiredPartOf.length; j++) {
+        const rel = rule.requiredPartOf[j]
+        if (!rel.entity) {
+          return { valid: false, errors: [`Rule ${i + 1}, requiredPartOf ${j + 1}: Missing 'entity' field`] }
+        }
+      }
+    }
+    if (rule.requiredClassifications) {
+      for (let j = 0; j < rule.requiredClassifications.length; j++) {
+        const cls = rule.requiredClassifications[j]
+        if (!cls.system) {
+          return { valid: false, errors: [`Rule ${i + 1}, requiredClassifications ${j + 1}: Missing 'system' field`] }
+        }
+      }
+    }
+    if (rule.requiredMaterials) {
+      for (let j = 0; j < rule.requiredMaterials.length; j++) {
+        const mat = rule.requiredMaterials[j]
+        if (!mat.value) {
+          return { valid: false, errors: [`Rule ${i + 1}, requiredMaterials ${j + 1}: Missing 'value' field`] }
+        }
+      }
+    }
   }
 
   if (duplicateNames.length > 0) {
@@ -295,7 +332,7 @@ function validateIdsLight(data) {
     }
   }
 
-  console.log("[v0] Validation passed")
+  console.log("Validation passed")
   return { valid: true }
 }
 
@@ -358,10 +395,86 @@ function convertIdsLightToXml(data, opts = {}) {
       }
       xml += indent + indent + indent + indent + "</ids:entity>" + newline
 
+        // Applicability: partOf
+        ; (rule.partOf || []).forEach((po) => {
+          xml += indent + indent + indent + indent + `<ids:partOf` +
+            (po.relation ? ` relation="${escapeXml(po.relation)}"` : "") +
+            (po.instructions ? ` instructions="${escapeXml(po.instructions)}"` : "") +
+            `>` + newline
+          xml += indent + indent + indent + indent + indent + "<ids:entity>" + newline
+          xml += indent + indent + indent + indent + indent + indent +
+            `<ids:name><ids:simpleValue>${escapeXml(po.entity.toUpperCase())}</ids:simpleValue></ids:name>` + newline
+          if (po.predefinedType) {
+            xml += indent + indent + indent + indent + indent + indent +
+              `<ids:predefinedType><ids:simpleValue>${escapeXml(po.predefinedType)}</ids:simpleValue></ids:predefinedType>` + newline
+          }
+          xml += indent + indent + indent + indent + indent + "</ids:entity>" + newline
+          xml += indent + indent + indent + indent + "</ids:partOf>" + newline
+        })
+        // Applicability: classifications
+        ; (rule.classifications || []).forEach((c) => {
+          xml += indent + indent + indent + indent + `<ids:classification>` + newline
+          if (c.value) {
+            xml += indent + indent + indent + indent + indent + `<ids:value><ids:simpleValue>${escapeXml(c.value)}</ids:simpleValue></ids:value>` + newline
+          }
+          xml += indent + indent + indent + indent + indent + `<ids:system><ids:simpleValue>${escapeXml(c.system)}</ids:simpleValue></ids:system>` + newline
+          xml += indent + indent + indent + indent + `</ids:classification>` + newline
+        })
+        // Applicability: materials
+        ; (rule.materials || []).forEach((m) => {
+          xml += indent + indent + indent + indent + `<ids:material>` + newline
+          if (m.value) {
+            xml += indent + indent + indent + indent + indent + `<ids:value><ids:simpleValue>${escapeXml(m.value)}</ids:simpleValue></ids:value>` + newline
+          }
+          xml += indent + indent + indent + indent + `</ids:material>` + newline
+        })
+
       xml += indent + indent + indent + "</ids:applicability>" + newline
 
       // Requirements
       xml += indent + indent + indent + '<ids:requirements description="Generated from IDS-Light">' + newline
+
+        // Required partOf
+        ; (rule.requiredPartOf || []).forEach((po) => {
+          xml += indent + indent + indent + indent + `<ids:partOf cardinality="required"` +
+            (po.relation ? ` relation="${escapeXml(po.relation)}"` : "") +
+            (po.instructions ? ` instructions="${escapeXml(po.instructions)}"` : "") +
+            `>` + newline
+          xml += indent + indent + indent + indent + indent + "<ids:entity>" + newline
+          xml += indent + indent + indent + indent + indent + indent +
+            `<ids:name><ids:simpleValue>${escapeXml(po.entity.toUpperCase())}</ids:simpleValue></ids:name>` + newline
+          if (po.predefinedType) {
+            xml += indent + indent + indent + indent + indent + indent +
+              `<ids:predefinedType><ids:simpleValue>${escapeXml(po.predefinedType)}</ids:simpleValue></ids:predefinedType>` + newline
+          }
+          xml += indent + indent + indent + indent + indent + "</ids:entity>" + newline
+          xml += indent + indent + indent + indent + `</ids:partOf>` + newline
+        })
+
+        // Required classifications
+        ; (rule.requiredClassifications || []).forEach((c) => {
+          xml += indent + indent + indent + indent + `<ids:classification cardinality="required"` +
+            (c.uri ? ` uri="${escapeXml(c.uri)}"` : "") +
+            (c.instructions ? ` instructions="${escapeXml(c.instructions)}"` : "") +
+            `>` + newline
+          xml += indent + indent + indent + indent + indent + `<ids:system><ids:simpleValue>${escapeXml(c.system)}</ids:simpleValue></ids:system>` + newline
+          if (c.value) {
+            xml += indent + indent + indent + indent + indent + `<ids:value><ids:simpleValue>${escapeXml(c.value)}</ids:simpleValue></ids:value>` + newline
+          }
+          xml += indent + indent + indent + indent + `</ids:classification>` + newline
+        })
+
+        // Required materials
+        ; (rule.requiredMaterials || []).forEach((m) => {
+          xml += indent + indent + indent + indent + `<ids:material cardinality="required"` +
+            (m.uri ? ` uri="${escapeXml(m.uri)}"` : "") +
+            (m.instructions ? ` instructions="${escapeXml(m.instructions)}"` : "") +
+            `>` + newline
+          if (m.value) {
+            xml += indent + indent + indent + indent + indent + `<ids:value><ids:simpleValue>${escapeXml(m.value)}</ids:simpleValue></ids:value>` + newline
+          }
+          xml += indent + indent + indent + indent + `</ids:material>` + newline
+        })
 
         // Attributes
         ; (rule.attributes || []).forEach((attr) => {
@@ -483,11 +596,14 @@ function splitPropertyName(full) {
 }
 
 function toIfcType(datatype, base) {
+  // Handle special cases where property name implies datatype
+  if (base.toLowerCase().includes("thermaltransmittance")) {
+    return "IFCTHERMALTRANSMITTANCEMEASURE"
+  }
+
   if (!datatype) return "IFCLABEL"
   switch (datatype) {
     case "string":
-      // Special cases for specific properties
-      if (base.toLowerCase().includes("thermaltransmittance")) return "IFCTHERMALTRANSMITTANCEMEASURE"
       return "IFCLABEL"
     case "boolean":
       return "IFCBOOLEAN"
@@ -580,22 +696,22 @@ self.onmessage = (e) => {
   if (e.data?.type !== "convert") return
 
   try {
-    console.log("[v0] Worker received conversion request")
+    console.log("Worker received conversion request")
     const data = parseIdsLight(e.data.text)
     const validation = validateIdsLight(data)
 
     if (!validation.valid) {
-      console.log("[v0] Validation failed:", validation.errors)
+      console.log("Validation failed:", validation.errors)
       self.postMessage({ ok: false, errors: validation.errors || ["Validation failed"] })
       return
     }
 
-    console.log("[v0] Converting to XML...")
+    console.log("Converting to XML...")
     const xml = convertIdsLightToXml(data, { pretty: true })
-    console.log("[v0] Conversion successful")
+    console.log("Conversion successful")
     self.postMessage({ ok: true, xml, readable: data })
   } catch (err) {
-    console.log("[v0] Worker error:", err)
+    console.log("Worker error:", err)
     self.postMessage({ ok: false, errors: [String(err?.message || err || "Unknown error")] })
   }
 }

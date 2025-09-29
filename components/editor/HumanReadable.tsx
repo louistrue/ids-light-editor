@@ -40,7 +40,7 @@ export function HumanReadable({ data }: { data: any }) {
         {(ids.rules || []).map((r: any, i: number) => (
           <div key={i} className="mb-4 rounded-md border p-3 bg-muted/20">
             <div className="font-semibold mb-2">
-              {r.name || r.entity} – <code className="text-xs bg-muted px-1 py-0.5 rounded">{r.entity}</code>
+              {r.name || r.entity} - <code className="text-xs bg-muted px-1 py-0.5 rounded">{r.entity}</code>
             </div>
             {r.predefinedType && (
               <div className="mb-2 text-xs">

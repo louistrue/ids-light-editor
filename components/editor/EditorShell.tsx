@@ -263,12 +263,12 @@ export function EditorShell() {
   }, [xml, showShortcuts, toggleTheme]) // Added toggleTheme to dependency array
 
   useEffect(() => {
-    console.log("[v0] Initializing worker...")
+    console.log("Initializing worker...")
     const w = new Worker(new URL("/workers/idsWorker.js", window.location.origin))
     workerRef.current = w
 
     w.onmessage = (e: MessageEvent<{ ok: boolean; xml?: string; readable?: any; errors?: string[] }>) => {
-      console.log("[v0] Worker response:", e.data)
+      console.log("Worker response:", e.data)
       if (!e.data.ok) {
         setStatus("invalid")
         setErrors(e.data.errors ?? ["Unknown error"])
@@ -284,7 +284,7 @@ export function EditorShell() {
 
     return () => {
       if (workerRef.current) {
-        console.log("[v0] Terminating worker...")
+        console.log("Terminating worker...")
         workerRef.current.terminate()
         workerRef.current = null
       }
@@ -293,16 +293,16 @@ export function EditorShell() {
 
   useEffect(() => {
     // This effect handles the initial conversion and any subsequent changes to the source.
-    if (source && workerRef.current) {
+    if (hydrated && source && workerRef.current) {
       setStatus((s) => (s === "idle" ? "idle" : "processing"))
       const t = setTimeout(() => {
         setStatus("processing")
-        console.log("[v0] Sending conversion request...")
+        console.log("Sending conversion request...")
         workerRef.current?.postMessage({ type: "convert", text: source })
       }, 250)
       return () => clearTimeout(t)
     }
-  }, [source]) // It runs whenever the source code changes.
+  }, [source, hydrated]) // It runs whenever the source code changes.
 
   useEffect(() => {
     localStorage.setItem("idsLightSource", source)
@@ -311,12 +311,16 @@ export function EditorShell() {
 
   useEffect(() => {
     if (xml) {
-      sessionStorage.setItem('idsLightXml', xml);
+      sessionStorage.setItem("idsLightXml", xml)
+    } else {
+      sessionStorage.removeItem("idsLightXml")
     }
     if (readable) {
-      sessionStorage.setItem('idsLightReadable', JSON.stringify(readable));
+      sessionStorage.setItem("idsLightReadable", JSON.stringify(readable))
+    } else {
+      sessionStorage.removeItem("idsLightReadable")
     }
-  }, [xml, readable]);
+  }, [xml, readable])
 
   // Auto-validate when switching to validation tab
   useEffect(() => {
@@ -752,9 +756,9 @@ export function EditorShell() {
                   <div className="flex bg-muted rounded-md p-1">
                     <button
                       onClick={() => setOutputView("xml")}
-                      className={`px-3 py-1 text-xs rounded transition-all duration-200 ${outputView === "xml"
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
+                      className={`px-3 py-1 text-xs rounded-md font-medium transition-all duration-200 ${outputView === "xml"
+                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 shadow-sm"
+                        : "text-muted-foreground hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-900/20 dark:hover:text-blue-300"
                         }`}
                       aria-pressed={outputView === "xml"}
                     >
@@ -762,9 +766,9 @@ export function EditorShell() {
                     </button>
                     <button
                       onClick={() => setOutputView("readable")}
-                      className={`px-3 py-1 text-xs rounded transition-all duration-200 ${outputView === "readable"
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
+                      className={`px-3 py-1 text-xs rounded-md font-medium transition-all duration-200 ${outputView === "readable"
+                        ? "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300 shadow-sm"
+                        : "text-muted-foreground hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-900/20 dark:hover:text-green-300"
                         }`}
                       aria-pressed={outputView === "readable"}
                     >
@@ -772,9 +776,9 @@ export function EditorShell() {
                     </button>
                     <button
                       onClick={() => setOutputView("validation")}
-                      className={`px-3 py-1 text-xs rounded transition-all duration-200 ${outputView === "validation"
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
+                      className={`px-3 py-1 text-xs rounded-md font-medium transition-all duration-200 ${outputView === "validation"
+                        ? "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 shadow-sm"
+                        : "text-muted-foreground hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-900/20 dark:hover:text-amber-300"
                         }`}
                       aria-pressed={outputView === "validation"}
                     >
@@ -1058,7 +1062,7 @@ export function EditorShell() {
                         </pre>
                       ) : (
                         <div className="text-sm text-muted-foreground flex items-center justify-center h-32">
-                          Click Validate to check XML
+                          Open this tab to run validation. Results will appear here.
                         </div>
                       )}
                     </div>

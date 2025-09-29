@@ -85,7 +85,7 @@ export default function DocsPage() {
                         <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
                             IDS-Light is a <strong>human-friendly YAML/JSON format</strong> for authoring buildingSMART{" "}
                             <a href="https://www.buildingsmart.org/standards/bsi-standards/information-delivery-specification-ids/"
-                                className="text-primary hover:underline" target="_blank" rel="noopener">
+                                className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
                                 Information Delivery Specifications (IDS)
                             </a>.
                             Instead of writing verbose XML by hand, you describe your building requirements in readable YAML that gets automatically converted to standards-compliant IDS 1.0 XML.
@@ -149,7 +149,7 @@ export default function DocsPage() {
                     {/* Applicability vs Requirements */}
                     <ConceptCard
                         icon={Building}
-                        title="🏗️ Applicability vs Requirements"
+                        title="Applicability vs Requirements"
                         description="IDS rules have two main parts that work together"
                         variant="primary"
                     >
@@ -216,7 +216,7 @@ export default function DocsPage() {
                     <div className="bg-card p-6 rounded-lg border border-border space-y-4">
                         <div className="flex items-center gap-3">
                             <Puzzle className="w-6 h-6 text-primary" />
-                            <h3 className="text-lg font-semibold">🧩 Facets: The Building Blocks</h3>
+                            <h3 className="text-lg font-semibold">Facets: The Building Blocks</h3>
                         </div>
                         <p className="text-muted-foreground">IDS uses facets to describe different aspects of building elements:</p>
 
@@ -273,7 +273,7 @@ export default function DocsPage() {
                     {/* Cardinality */}
                     <ConceptCard
                         icon={Settings}
-                        title="🎯 Cardinality: Required, Optional, Prohibited"
+                        title="Cardinality: Required, Optional, Prohibited"
                         description="Control how many times requirements should appear"
                         variant="default"
                     >
@@ -340,7 +340,7 @@ export default function DocsPage() {
                     {/* Data Types */}
                     <ConceptCard
                         icon={Code}
-                        title="⚙️ Data Types & Validation"
+                        title="Data Types & Validation"
                         description="Understanding how IDS-Light simplifies IFC data types"
                         variant="warning"
                     >
@@ -490,7 +490,7 @@ export default function DocsPage() {
 
                     {/* Fire Doors Example */}
                     <InteractiveExample
-                        title="🔥 Multi-Facet Door Requirements"
+                        title="Multi-Facet Door Requirements"
                         description="A comprehensive example showing all facet types working together"
                         code={`- name: "Fire Rated Doors in Stairwells"
   entity: "IfcDoor"
@@ -557,6 +557,12 @@ export default function DocsPage() {
                                 color: "green",
                                 label: "Property Requirements",
                                 description: "Requires specific fire rating and thermal properties. These are critical for compliance validation."
+                            },
+                            {
+                                lines: ["30", "31", "32", "33", "34", "35"],
+                                color: "teal",
+                                label: "Attribute Requirements",
+                                description: "Validates direct IFC attributes like Name using pattern matching. This ensures doors follow proper naming conventions for identification."
                             }
                         ]}
                         explanation="Click the highlight buttons to explore different parts of this comprehensive rule. Each section serves a specific validation purpose."
@@ -564,7 +570,8 @@ export default function DocsPage() {
                             "Use partOf in applicability to filter which elements the rule applies to",
                             "Combine multiple requirement types for comprehensive validation",
                             "Instructions help BIM authors understand the business logic behind requirements",
-                            "Pattern matching ensures naming conventions are followed"
+                            "Pattern matching in attributes ensures naming conventions are followed",
+                            "Attributes validate direct IFC properties like Name, Description, or ObjectType"
                         ]}
                     />
 
@@ -625,19 +632,19 @@ export default function DocsPage() {
                                 description: "Requires beams to have proper structural classifications in both Uniclass and eBKP systems for international compliance."
                             },
                             {
-                                lines: ["15", "16", "17", "18"],
+                                lines: ["16", "17", "18", "19"],
                                 color: "red",
                                 label: "Material Requirements",
                                 description: "Ensures all beams are specified as structural steel with proper material references for engineering analysis."
                             },
                             {
-                                lines: ["19", "20", "21", "22", "23", "24", "25", "26", "27"],
+                                lines: ["21", "22", "23", "24", "25", "26", "27", "28", "29"],
                                 color: "green",
                                 label: "Property Requirements",
                                 description: "Requires essential beam properties like section type and span for structural design validation."
                             },
                             {
-                                lines: ["28", "29", "30", "31", "32", "33", "34", "35", "36"],
+                                lines: ["31", "32", "33", "34", "35", "36", "37", "38", "39"],
                                 color: "purple",
                                 label: "Quantity Requirements",
                                 description: "Ensures quantity take-off data is available for length and cross-sectional area calculations."
@@ -657,12 +664,10 @@ export default function DocsPage() {
                         description="Space validation rules for office environments"
                         code={`- name: "Office Spaces"
   entity: "IfcSpace"
-
   # Applicability: Only office spaces
   classifications:
     - system: "Uniclass"
       value: "EF_70_10_25"  # Office space classification
-
   # Requirements: Space must meet office standards
   attributes:
     - name: "Name"
@@ -670,14 +675,12 @@ export default function DocsPage() {
       presence: "required"
       pattern: "^Office .+"
       instructions: "Must be clearly identified as office space"
-
   properties:
     - name: "Pset_SpaceCommon.OccupancyType"
       datatype: "string"
       presence: "required"
       allowed_values: ["OFFICE", "MEETING", "OPEN_PLAN"]
       instructions: "Specific occupancy type required"
-
   quantities:
     - name: "Qto_SpaceBaseQuantities.NetFloorArea"
       datatype: "area"
@@ -695,25 +698,25 @@ export default function DocsPage() {
                                 description: "Targets IfcSpace elements which represent spatial boundaries and functional areas in the building model."
                             },
                             {
-                                lines: ["5", "6", "7"],
+                                lines: ["4", "5", "6"],
                                 color: "amber",
                                 label: "Applicability Filter",
                                 description: "Uses Uniclass classification to filter only office spaces. This ensures the rule only applies to spaces designated as offices."
                             },
                             {
-                                lines: ["10", "11", "12", "13", "14", "15"],
+                                lines: ["8", "9", "10", "11", "12", "13"],
                                 color: "purple",
                                 label: "Naming Requirements",
                                 description: "Ensures spaces are properly named with 'Office' prefix using regex pattern matching for clear identification."
                             },
                             {
-                                lines: ["16", "17", "18", "19", "20", "21"],
+                                lines: ["14", "15", "16", "17", "18", "19"],
                                 color: "green",
                                 label: "Occupancy Properties",
                                 description: "Validates occupancy type with specific allowed values for proper space function classification."
                             },
                             {
-                                lines: ["22", "23", "24", "25", "26", "27", "28", "29"],
+                                lines: ["20", "21", "22", "23", "24", "25", "26", "27", "28"],
                                 color: "red",
                                 label: "Space Measurements",
                                 description: "Requires critical space dimensions for occupancy calculations and building code compliance analysis."
@@ -932,7 +935,7 @@ export default function DocsPage() {
             {/* Footer */}
             <footer className="border-t border-border bg-card">
                 <div className="max-w-4xl mx-auto px-4 py-6 text-center text-sm text-muted-foreground">
-                    <p>IDS-Light Editor • Made with ❤️ by Louis Trümpler • <a href="https://github.com/buildingsmart/IDS" className="text-primary hover:underline" target="_blank" rel="noopener">buildingSMART IDS</a></p>
+                    <p>IDS-Light Editor • Made with ❤️ by Louis Trümpler • <a href="https://github.com/buildingsmart/IDS" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">buildingSMART IDS</a></p>
                 </div>
             </footer>
         </div>

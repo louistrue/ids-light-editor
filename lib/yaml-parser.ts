@@ -16,12 +16,12 @@ export interface ParseResult {
 export function parseYAML(yamlStr: string, enableLogging = false): ParseResult {
     const log = enableLogging ? console.log : () => { }
 
-    log("[v0] === YAML PARSING START ===")
-    log("[v0] Input YAML:", yamlStr)
-    log("[v0] Input length:", yamlStr.length)
+    log("=== YAML PARSING START ===")
+    log("Input YAML:", yamlStr)
+    log("Input length:", yamlStr.length)
 
     const lines = yamlStr.split("\n")
-    log("[v0] Total lines:", lines.length)
+    log("Total lines:", lines.length)
 
     const result: ParseResult = { ids: { ifcVersion: "IFC4", rules: [] } }
     const parseErrors: string[] = []
@@ -36,10 +36,10 @@ export function parseYAML(yamlStr: string, enableLogging = false): ParseResult {
         const line = lines[i]
         const trimmed = line.trim()
 
-        log(`[v0] Line ${i + 1}: "${line}" (trimmed: "${trimmed}")`)
+        log(`Line ${i + 1}: "${line}" (trimmed: "${trimmed}")`)
 
         if (!trimmed || trimmed.startsWith("#")) {
-            log("[v0] Skipping empty/comment line")
+            log("Skipping empty/comment line")
             continue
         }
 
@@ -47,30 +47,37 @@ export function parseYAML(yamlStr: string, enableLogging = false): ParseResult {
 
         // Root level properties
         if (trimmed.startsWith("ids:")) {
-            log("[v0] Found ids: marker")
+            log("Found ids: marker")
             lineParsed = true
         } else if (trimmed.startsWith("title:")) {
             result.ids.title = extractValue(trimmed)
-            log("[v0] Set title:", result.ids.title)
+            log("Set title:", result.ids.title)
             lineParsed = true
         } else if (trimmed.startsWith("description:")) {
             result.ids.description = extractValue(trimmed)
-            log("[v0] Set description:", result.ids.description)
+            log("Set description:", result.ids.description)
             lineParsed = true
         } else if (trimmed.startsWith("author:")) {
             result.ids.author = extractValue(trimmed)
-            log("[v0] Set author:", result.ids.author)
+            log("Set author:", result.ids.author)
             lineParsed = true
         } else if (trimmed.startsWith("date:")) {
             result.ids.date = extractValue(trimmed)
-            log("[v0] Set date:", result.ids.date)
+            log("Set date:", result.ids.date)
             lineParsed = true
         } else if (trimmed.startsWith("ifcVersion:")) {
-            result.ids.ifcVersion = extractValue(trimmed) as any
-            log("[v0] Set ifcVersion:", result.ids.ifcVersion)
+            const v = extractValue(trimmed)
+            const allowed = new Set(["IFC2X3", "IFC4", "IFC4X3_ADD2"])
+            if (allowed.has(v)) {
+                result.ids.ifcVersion = v as typeof result.ids.ifcVersion
+                log("Set ifcVersion:", result.ids.ifcVersion)
+            } else {
+                parseErrors.push(`Invalid ifcVersion "${v}" (expected IFC2X3 | IFC4 | IFC4X3_ADD2)`)
+                log("Invalid ifcVersion:", v)
+            }
             lineParsed = true
         } else if (trimmed.startsWith("rules:")) {
-            log("[v0] Entering rules section")
+            log("Entering rules section")
             inRulesSection = true
             lineParsed = true
         } else if (inRulesSection) {
@@ -78,7 +85,7 @@ export function parseYAML(yamlStr: string, enableLogging = false): ParseResult {
 
             // New rule - starts with "- " at the rules level (typically 4 spaces indentation)
             if (trimmed.startsWith("- ") && indentLevel <= 4) {
-                log("[v0] Found new rule marker")
+                log("Found new rule marker")
                 currentRule = {}
                 result.ids.rules.push(currentRule)
                 currentSection = null // Reset section when starting new rule
@@ -90,7 +97,7 @@ export function parseYAML(yamlStr: string, enableLogging = false): ParseResult {
                     const fieldName = afterDash.split(":")[0].trim()
                     const fieldValue = extractValue(afterDash)
                     currentRule[fieldName] = fieldValue
-                    log(`[v0] Set ${fieldName} for new rule:`, fieldValue)
+                    log(`Set ${fieldName} for new rule:`, fieldValue)
                 }
                 lineParsed = true
             }
@@ -103,13 +110,13 @@ export function parseYAML(yamlStr: string, enableLogging = false): ParseResult {
                 if (fieldName === "attributes" || fieldName === "properties" || fieldName === "quantities" ||
                     fieldName === "requiredPartOf" || fieldName === "partOf" || fieldName === "classifications" ||
                     fieldName === "materials" || fieldName === "requiredClassifications" || fieldName === "requiredMaterials") {
-                    log(`[v0] Starting ${fieldName} section`)
+                    log(`Starting ${fieldName} section`)
                     currentSection = fieldName
                     currentRule[fieldName] = []
                     currentItem = null
                     lineParsed = true
                 } else if (currentSection && currentItem) {
-                    log(`[v0] Setting ${fieldName} for current ${currentSection} item:`, fieldValue)
+                    log(`Setting ${fieldName} for current ${currentSection} item:`, fieldValue)
 
                     if (fieldName === "allowed_values") {
                         // Parse array values
@@ -125,7 +132,7 @@ export function parseYAML(yamlStr: string, enableLogging = false): ParseResult {
                                     return trimmedV
                                 })
                             currentItem.allowed_values = values
-                            log("[v0] Set allowed_values:", values)
+                            log("Set allowed_values:", values)
                         }
                     } else {
                         currentItem[fieldName] = fieldValue
@@ -134,20 +141,20 @@ export function parseYAML(yamlStr: string, enableLogging = false): ParseResult {
                 } else {
                     // Regular rule field (entity, name, etc.)
                     currentRule[fieldName] = fieldValue
-                    log(`[v0] Set ${fieldName} for current rule:`, fieldValue)
+                    log(`Set ${fieldName} for current rule:`, fieldValue)
                     lineParsed = true
                 }
             }
             // Section items - start with "- " when we're in a section (typically 8+ spaces indentation)
             else if (currentSection && trimmed.startsWith("- ") && indentLevel > 4) {
-                log(`[v0] Found new item in ${currentSection} section`)
+                log(`Found new item in ${currentSection} section`)
                 const afterDash = trimmed.substring(2).trim()
                 if (afterDash.includes(":")) {
                     const fieldName = afterDash.split(":")[0].trim()
                     const fieldValue = extractValue(afterDash)
                     currentItem = { [fieldName]: fieldValue }
                     currentRule[currentSection].push(currentItem)
-                    log(`[v0] Created new ${currentSection} item with ${fieldName}:`, fieldValue)
+                    log(`Created new ${currentSection} item with ${fieldName}:`, fieldValue)
                     lineParsed = true
                 } else {
                     // Item without immediate field, just create empty item
@@ -160,7 +167,7 @@ export function parseYAML(yamlStr: string, enableLogging = false): ParseResult {
 
         if (!lineParsed) {
             unparsedLines.push({ lineNumber: i + 1, content: line })
-            log(`[v0] WARNING: Unparsed line ${i + 1}: "${line}"`)
+            log(`WARNING: Unparsed line ${i + 1}: "${line}"`)
         }
     }
 
@@ -170,9 +177,9 @@ export function parseYAML(yamlStr: string, enableLogging = false): ParseResult {
         )
     }
 
-    log("[v0] === YAML PARSING COMPLETE ===")
-    log("[v0] Final parsed result:", JSON.stringify(result, null, 2))
-    log("[v0] Parse errors:", parseErrors)
+    log("=== YAML PARSING COMPLETE ===")
+    log("Final parsed result:", JSON.stringify(result, null, 2))
+    log("Parse errors:", parseErrors)
 
     if (parseErrors.length > 0) {
         throw new Error(parseErrors.join("; "))
@@ -186,6 +193,12 @@ function extractValue(line: string): string {
     if (colonIndex === -1) return ""
 
     let value = line.substring(colonIndex + 1).trim()
+
+    // Remove inline comments (everything after #)
+    const commentIndex = value.indexOf("#")
+    if (commentIndex !== -1) {
+        value = value.substring(0, commentIndex).trim()
+    }
 
     // Remove quotes
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
