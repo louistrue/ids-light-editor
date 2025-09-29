@@ -140,7 +140,7 @@ describe("IDS-Light Converter", () => {
   describe("convertIdsLightToXml", () => {
     it("should convert valid IDS-Light to XML", () => {
       const data = parseIdsLight(validYamlInput)
-      const xml = convertIdsLightToXml(data)
+      const xml = convertIdsLightToXml(data, { pretty: false })
 
       expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>')
       expect(xml).toContain('xmlns:ids="http://standards.buildingsmart.org/IDS"')
@@ -151,7 +151,7 @@ describe("IDS-Light Converter", () => {
 
     it("should handle door properties correctly", () => {
       const data = parseIdsLight(validYamlInput)
-      const xml = convertIdsLightToXml(data)
+      const xml = convertIdsLightToXml(data, { pretty: false })
 
       expect(xml).toContain("<ids:property")
       expect(xml).toContain("<ids:propertySet><ids:simpleValue>Pset_DoorCommon</ids:simpleValue></ids:propertySet>")
@@ -162,7 +162,7 @@ describe("IDS-Light Converter", () => {
 
     it("should handle space attributes correctly", () => {
       const data = parseIdsLight(validYamlInput)
-      const xml = convertIdsLightToXml(data)
+      const xml = convertIdsLightToXml(data, { pretty: false })
 
       expect(xml).toContain("<ids:attribute")
       expect(xml).toContain("<ids:name><ids:simpleValue>Name</ids:simpleValue></ids:name>")
@@ -170,7 +170,7 @@ describe("IDS-Light Converter", () => {
 
     it("should handle quantities with correct dataTypes", () => {
       const data = parseIdsLight(validYamlInput)
-      const xml = convertIdsLightToXml(data)
+      const xml = convertIdsLightToXml(data, { pretty: false })
 
       expect(xml).toContain('dataType="IFCAREAMEASURE"') // for area quantities
       expect(xml).toContain(
@@ -181,13 +181,55 @@ describe("IDS-Light Converter", () => {
 
     it("should handle allowed values as enumerations", () => {
       const data = parseIdsLight(validYamlInput)
-      const xml = convertIdsLightToXml(data)
+      const xml = convertIdsLightToXml(data, { pretty: false })
 
       expect(xml).toContain("<ids:value>")
       expect(xml).toContain('<xs:restriction base="xs:string">')
       expect(xml).toContain('<xs:enumeration value="EI30"/>')
       expect(xml).toContain('<xs:enumeration value="EI60"/>')
       expect(xml).toContain('<xs:enumeration value="EI90"/>')
+    })
+
+    it("should handle architectural example correctly", () => {
+      const architecturalYaml = `ids:
+  title: "Architectural Elements (IDS-Light)"
+  description: "Design requirements for windows and doors"
+  author: "Architect"
+  date: "2025-01-15"
+  ifcVersion: "IFC4"
+  rules:
+    - name: "IfcWindow - Thermal Performance"
+      entity: "IfcWindow"
+      properties:
+        - name: "Pset_WindowCommon.ThermalTransmittance"
+          datatype: "number"
+          presence: "required"
+    - name: "IfcDoor - Security & Fire (Internal)"
+      entity: "IfcDoor"
+      classifications:
+        - system: "Uniclass"
+          value: "EF_25_30_40_40" # Internal doorsets`
+      const data = parseIdsLight(architecturalYaml)
+      const xml = convertIdsLightToXml(data, { pretty: false })
+      expect(xml).toContain('dataType="IFCTHERMALTRANSMITTANCEMEASURE"')
+      expect(xml).toContain('<ids:classification><ids:value><ids:simpleValue>EF_25_30_40_40</ids:simpleValue></ids:value><ids:system><ids:simpleValue>Uniclass</ids:simpleValue></ids:system></ids:classification>')
+    })
+
+    it("should strip inline comments from YAML values", () => {
+      const yamlWithComments = `ids:
+  ifcVersion: "IFC4"
+  rules:
+    - entity: "IfcDoor"
+      classifications:
+        - system: "Uniclass"
+          value: "EF_25_30_40_40" # This is a comment
+      properties:
+        - name: "Pset_DoorCommon.FireRating"
+          datatype: "string" # Another comment
+          presence: "required"`
+      const data = parseIdsLight(yamlWithComments)
+      expect(data.ids.rules[0].classifications[0].value).toBe("EF_25_30_40_40")
+      expect(data.ids.rules[0].properties[0].datatype).toBe("string")
     })
 
     it("should map datatypes to correct IFC types", () => {
@@ -215,7 +257,7 @@ describe("IDS-Light Converter", () => {
         },
       }
 
-      const xml = convertIdsLightToXml(testData)
+      const xml = convertIdsLightToXml(testData, { pretty: false })
       expect(xml).toContain('dataType="IFCLABEL"')
       expect(xml).toContain('dataType="IFCBOOLEAN"')
       expect(xml).toContain('dataType="IFCINTEGER"')
@@ -246,7 +288,7 @@ describe("IDS-Light Converter", () => {
         },
       }
 
-      const xml = convertIdsLightToXml(testData)
+      const xml = convertIdsLightToXml(testData, { pretty: false })
       expect(xml).toContain('cardinality="required"')
       expect(xml).toContain('cardinality="optional"')
       expect(xml).toContain('cardinality="prohibited"')
@@ -268,7 +310,7 @@ describe("IDS-Light Converter", () => {
       expect(validation.valid).toBe(true)
 
       // Convert
-      const xml = convertIdsLightToXml(parsed)
+      const xml = convertIdsLightToXml(parsed, { pretty: false })
       expect(xml).toContain("<ids:title>Test IDS</ids:title>")
       expect(xml).toContain('xmlns:ids="http://standards.buildingsmart.org/IDS"')
     })
@@ -276,20 +318,20 @@ describe("IDS-Light Converter", () => {
     it("should handle course scenario examples", () => {
       // Test Door FireRating scenario (Group A)
       const doorYaml = `ids:
-        ifcVersion: "IFC4"
-        rules:
-          - entity: "IfcDoor"
-            properties:
-              - name: "Pset_DoorCommon.FireRating"
-                datatype: "string"
-                presence: "required"
-                allowed_values: ["EI30", "EI60", "EI90"]`
+  ifcVersion: "IFC4"
+  rules:
+    - entity: "IfcDoor"
+      properties:
+        - name: "Pset_DoorCommon.FireRating"
+          datatype: "string"
+          presence: "required"
+          allowed_values: ["EI30", "EI60", "EI90"]`
 
       const doorData = parseIdsLight(doorYaml)
       const doorValidation = validateIdsLight(doorData)
       expect(doorValidation.valid).toBe(true)
 
-      const doorXml = convertIdsLightToXml(doorData)
+      const doorXml = convertIdsLightToXml(doorData, { pretty: false })
       expect(doorXml).toContain("IfcDoor")
       expect(doorXml).toContain("Pset_DoorCommon")
       expect(doorXml).toContain("FireRating")
@@ -298,19 +340,19 @@ describe("IDS-Light Converter", () => {
 
     it("should handle wall width scenario (Group C)", () => {
       const wallYaml = `ids:
-        ifcVersion: "IFC4"
-        rules:
-          - entity: "IfcWall"
-            quantities:
-              - name: "Qto_WallBaseQuantities.Width"
-                datatype: "length"
-                presence: "required"`
+  ifcVersion: "IFC4"
+  rules:
+    - entity: "IfcWall"
+      quantities:
+        - name: "Qto_WallBaseQuantities.Width"
+          datatype: "length"
+          presence: "required"`
 
       const wallData = parseIdsLight(wallYaml)
       const wallValidation = validateIdsLight(wallData)
       expect(wallValidation.valid).toBe(true)
 
-      const wallXml = convertIdsLightToXml(wallData)
+      const wallXml = convertIdsLightToXml(wallData, { pretty: false })
       expect(wallXml).toContain("IfcWall")
       expect(wallXml).toContain("Qto_WallBaseQuantities")
       expect(wallXml).toContain("Width")
@@ -332,7 +374,7 @@ describe("IDS-Light Converter", () => {
         },
       }
 
-      const xml = convertIdsLightToXml(testData)
+      const xml = convertIdsLightToXml(testData, { pretty: false })
       expect(xml).toContain("<ids:propertySet><ids:simpleValue>Pset_Common</ids:simpleValue></ids:propertySet>")
       expect(xml).toContain("<ids:baseName><ids:simpleValue>SimpleName</ids:simpleValue></ids:baseName>")
     })
@@ -355,7 +397,7 @@ describe("IDS-Light Converter", () => {
         },
       }
 
-      const xml = convertIdsLightToXml(testData)
+      const xml = convertIdsLightToXml(testData, { pretty: false })
       expect(xml).toContain('dataType="IFCLENGTHMEASURE"')
       expect(xml).toContain('dataType="IFCAREAMEASURE"')
       expect(xml).toContain('dataType="IFCVOLUMEMEASURE"')
@@ -380,8 +422,284 @@ describe("IDS-Light Converter", () => {
         },
       }
 
-      const xml = convertIdsLightToXml(testData)
+      const xml = convertIdsLightToXml(testData, { pretty: false })
       expect(xml).toContain('<xs:pattern value="[A-Z]{2}[0-9]{2}"/>')
+    })
+
+    it("should handle legacy singular classification field and normalize it to classifications array", () => {
+      const testData: IdsLight = {
+        ids: {
+          ifcVersion: "IFC4",
+          rules: [
+            {
+              entity: "IfcWall",
+              classification: {
+                system: "Uniclass",
+                value: "EF_25_10",
+              },
+            },
+          ],
+        },
+      }
+
+      const xml = convertIdsLightToXml(testData, { pretty: false })
+      expect(xml).toContain("<ids:classification")
+      expect(xml).toContain("<ids:system><ids:simpleValue>Uniclass</ids:simpleValue></ids:system>")
+      expect(xml).toContain("<ids:value><ids:simpleValue>EF_25_10</ids:simpleValue></ids:value>")
+    })
+
+    it("should merge legacy classification with existing classifications array", () => {
+      const testData: IdsLight = {
+        ids: {
+          ifcVersion: "IFC4",
+          rules: [
+            {
+              entity: "IfcWall",
+              classifications: [
+                {
+                  system: "OmniClass",
+                  value: "12-34",
+                },
+              ],
+              classification: {
+                system: "Uniclass",
+                value: "EF_25_10",
+              },
+            },
+          ],
+        },
+      }
+
+      const xml = convertIdsLightToXml(testData, { pretty: false })
+      // Check for OmniClass
+      expect(xml).toContain("<ids:system><ids:simpleValue>OmniClass</ids:simpleValue></ids:system>")
+      expect(xml).toContain("<ids:value><ids:simpleValue>12-34</ids:simpleValue></ids:value>")
+      // Check for Uniclass
+      expect(xml).toContain("<ids:system><ids:simpleValue>Uniclass</ids:simpleValue></ids:system>")
+      expect(xml).toContain("<ids:value><ids:simpleValue>EF_25_10</ids:simpleValue></ids:value>")
+    })
+
+    it("should handle partOf relationships in applicability", () => {
+      const testData: IdsLight = {
+        ids: {
+          ifcVersion: "IFC4",
+          rules: [
+            {
+              entity: "IfcDoor",
+              partOf: [
+                {
+                  entity: "IfcBuilding",
+                  relation: "IFCRELCONTAINEDINSPATIALSTRUCTURE",
+                  instructions: "Door must be contained in a building",
+                },
+                {
+                  entity: "IfcSpace",
+                  predefinedType: "SPACE",
+                },
+              ],
+            },
+          ],
+        },
+      }
+
+      const xml = convertIdsLightToXml(testData, { pretty: false })
+      expect(xml).toContain("<ids:partOf")
+      expect(xml).toContain('relation="IFCRELCONTAINEDINSPATIALSTRUCTURE"')
+      expect(xml).toContain('instructions="Door must be contained in a building"')
+      expect(xml).toContain("<ids:name><ids:simpleValue>IFCBUILDING</ids:simpleValue></ids:name>")
+      expect(xml).toContain("<ids:name><ids:simpleValue>IFCSPACE</ids:simpleValue></ids:name>")
+      expect(xml).toContain("<ids:predefinedType><ids:simpleValue>SPACE</ids:simpleValue></ids:predefinedType>")
+    })
+
+    it("should handle classification constraints in applicability", () => {
+      const testData: IdsLight = {
+        ids: {
+          ifcVersion: "IFC4",
+          rules: [
+            {
+              entity: "IfcWall",
+              classifications: [
+                {
+                  system: "Uniclass",
+                  value: "EF_25_10",
+                  uri: "https://uniclass2015.classification.bimstandards.org.uk/",
+                  instructions: "Wall must be classified under Uniclass system",
+                },
+              ],
+            },
+          ],
+        },
+      }
+
+      const xml = convertIdsLightToXml(testData, { pretty: false })
+      expect(xml).toContain("<ids:classification")
+      expect(xml).toContain("<ids:system><ids:simpleValue>Uniclass</ids:simpleValue></ids:system>")
+      expect(xml).toContain("<ids:value><ids:simpleValue>EF_25_10</ids:simpleValue></ids:value>")
+    })
+
+    it("should handle material constraints in applicability", () => {
+      const testData: IdsLight = {
+        ids: {
+          ifcVersion: "IFC4",
+          rules: [
+            {
+              entity: "IfcSlab",
+              materials: [
+                {
+                  value: "Concrete",
+                  uri: "https://material.library/concrete",
+                  instructions: "Slab must be made of concrete",
+                },
+              ],
+            },
+          ],
+        },
+      }
+
+      const xml = convertIdsLightToXml(testData, { pretty: false })
+      expect(xml).toContain("<ids:material")
+      expect(xml).toContain("<ids:value><ids:simpleValue>Concrete</ids:simpleValue></ids:value>")
+    })
+
+    it("should handle partOf requirements", () => {
+      const testData: IdsLight = {
+        ids: {
+          ifcVersion: "IFC4",
+          rules: [
+            {
+              entity: "IfcWindow",
+              requiredPartOf: [
+                {
+                  entity: "IfcWall",
+                  relation: "IFCRELVOIDSELEMENT IFCRELFILLSELEMENT",
+                  instructions: "Window must be hosted by a wall",
+                },
+              ],
+            },
+          ],
+        },
+      }
+
+      const xml = convertIdsLightToXml(testData, { pretty: false })
+      expect(xml).toContain('<ids:partOf cardinality="required"')
+      expect(xml).toContain('relation="IFCRELVOIDSELEMENT IFCRELFILLSELEMENT"')
+      expect(xml).toContain('instructions="Window must be hosted by a wall"')
+      expect(xml).toContain("<ids:name><ids:simpleValue>IFCWALL</ids:simpleValue></ids:name>")
+    })
+
+    it("should handle classification requirements", () => {
+      const testData: IdsLight = {
+        ids: {
+          ifcVersion: "IFC4",
+          rules: [
+            {
+              entity: "IfcBeam",
+              requiredClassifications: [
+                {
+                  system: "OmniClass",
+                  value: "23-13 11 13",
+                  uri: "https://www.omniclass.org/",
+                  instructions: "Beam must have OmniClass classification",
+                },
+              ],
+            },
+          ],
+        },
+      }
+
+      const xml = convertIdsLightToXml(testData, { pretty: false })
+      expect(xml).toContain('<ids:classification cardinality="required"')
+      expect(xml).toContain('uri="https://www.omniclass.org/"')
+      expect(xml).toContain('instructions="Beam must have OmniClass classification"')
+      expect(xml).toContain("<ids:system><ids:simpleValue>OmniClass</ids:simpleValue></ids:system>")
+      expect(xml).toContain("<ids:value><ids:simpleValue>23-13 11 13</ids:simpleValue></ids:value>")
+    })
+
+    it("should handle material requirements", () => {
+      const testData: IdsLight = {
+        ids: {
+          ifcVersion: "IFC4",
+          rules: [
+            {
+              entity: "IfcColumn",
+              requiredMaterials: [
+                {
+                  value: "Steel",
+                  uri: "https://material.library/steel",
+                  instructions: "Column must be made of steel",
+                },
+              ],
+            },
+          ],
+        },
+      }
+
+      const xml = convertIdsLightToXml(testData, { pretty: false })
+      expect(xml).toContain('<ids:material cardinality="required"')
+      expect(xml).toContain('uri="https://material.library/steel"')
+      expect(xml).toContain('instructions="Column must be made of steel"')
+      expect(xml).toContain("<ids:value><ids:simpleValue>Steel</ids:simpleValue></ids:value>")
+    })
+
+    it("should handle combined facet types", () => {
+      const testData: IdsLight = {
+        ids: {
+          ifcVersion: "IFC4",
+          rules: [
+            {
+              entity: "IfcDoor",
+              name: "Comprehensive Door Rule",
+              partOf: [
+                {
+                  entity: "IfcBuilding",
+                  relation: "IFCRELCONTAINEDINSPATIALSTRUCTURE",
+                },
+              ],
+              classifications: [
+                {
+                  system: "Uniclass",
+                  value: "EF_25_30",
+                },
+              ],
+              materials: [
+                {
+                  value: "Wood",
+                },
+              ],
+              requiredPartOf: [
+                {
+                  entity: "IfcWall",
+                },
+              ],
+              requiredClassifications: [
+                {
+                  system: "eBKP",
+                  value: "Tuer",
+                },
+              ],
+              requiredMaterials: [
+                {
+                  value: "Oak",
+                },
+              ],
+            },
+          ],
+        },
+      }
+
+      const xml = convertIdsLightToXml(testData, { pretty: false })
+      expect(xml).toContain('<ids:specification name="Comprehensive Door Rule"')
+
+      // Applicability facets
+      expect(xml).toContain("<ids:applicability")
+      expect(xml).toContain('<ids:partOf relation="IFCRELCONTAINEDINSPATIALSTRUCTURE"')
+      expect(xml).toContain("<ids:classification")
+      expect(xml).toContain("<ids:material")
+
+      // Requirements facets
+      expect(xml).toContain('<ids:partOf cardinality="required"')
+      expect(xml).toContain('<ids:classification cardinality="required"')
+      expect(xml).toContain('<ids:material cardinality="required"')
     })
   })
 })

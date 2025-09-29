@@ -3,7 +3,9 @@
 import type React from "react"
 
 import { useEffect, useRef, useState, useCallback } from "react"
-import { Loader2 } from 'lucide-react';
+import { Loader2, Github } from 'lucide-react';
+import { EditorPane } from "./EditorPane";
+import { XmlViewer } from "./XmlViewer";
 
 type ConvertStatus = "idle" | "processing" | "valid" | "invalid"
 
@@ -17,13 +19,15 @@ const examples = {
   date: "2025-01-15"
   ifcVersion: "IFC4"
   rules:
-    - name: "IfcDoor – FireRating required"
+    - name: "IfcDoor - In Wall with FireRating"
       entity: "IfcDoor"
+      requiredPartOf: # Requirement: must be contained in a wall
+        - entity: "IfcWall"
       properties:
         - name: "Pset_DoorCommon.FireRating"
           datatype: "string"
           presence: "required"
-    - name: "IfcSpace – Name and Area"
+    - name: "IfcSpace - Name and Area"
       entity: "IfcSpace"
       attributes:
         - name: "Name"
@@ -33,7 +37,7 @@ const examples = {
         - name: "Qto_SpaceBaseQuantities.NetFloorArea"
           datatype: "area"
           presence: "required"
-    - name: "IfcWall – Width required"
+    - name: "IfcWall - Width required"
       entity: "IfcWall"
       quantities:
         - name: "Qto_WallBaseQuantities.Width"
@@ -49,17 +53,19 @@ const examples = {
   date: "2025-01-15"
   ifcVersion: "IFC4"
   rules:
-    - name: "IfcWall – Load Bearing"
+    - name: "IfcWall - Load Bearing"
       entity: "IfcWall"
       properties:
         - name: "Pset_WallCommon.LoadBearing"
           datatype: "boolean"
           presence: "required"
         - name: "Pset_WallCommon.ThermalTransmittance"
-          datatype: "thermaltransmittance"
+          datatype: "number"
           presence: "required"
-    - name: "IfcColumn – Strength Class"
+    - name: "IfcColumn - Strength Class"
       entity: "IfcColumn"
+      requiredMaterials: # Requirement: must be concrete
+        - value: "Concrete"
       attributes:
         - name: "Name"
           datatype: "string"
@@ -78,24 +84,33 @@ const examples = {
   date: "2025-01-15"
   ifcVersion: "IFC4"
   rules:
-    - name: "IfcAirTerminal – Flow Rate"
+    - name: "IfcAirTerminal - In Spaces"
       entity: "IfcAirTerminal"
+      partOf: # Applicability: only terminals inside an IfcSpace
+        - entity: "IfcSpace"
       attributes:
         - name: "Name"
           datatype: "string"
           presence: "required"
       properties:
-        - name: "Pset_AirTerminalTypeCommon.NominalAirFlowRate"
-          datatype: "volumetricflowrate"
+        - name: "Pset_AirTerminalTypeCommon.DischargeDirection"
+          datatype: "string"
           presence: "required"
-    - name: "IfcElectricAppliance – Power"
+          allowed_values: ["HORIZONTAL", "VERTICAL", "ADJUSTABLE"]
+          instructions: "Air discharge direction specification"
+        - name: "Pset_AirTerminalTypeCommon.FlowControlType"
+          datatype: "string"
+          presence: "required"
+          instructions: "Flow control mechanism type"
+    - name: "IfcElectricAppliance - Status Tracking"
       entity: "IfcElectricAppliance"
-      properties:
-        - name: "Pset_ElectricApplianceTypeCommon.NominalPower"
-          datatype: "power"
+      attributes:
+        - name: "Name"
+          datatype: "string"
           presence: "required"
-        - name: "Pset_ElectricApplianceTypeCommon.NominalVoltage"
-          datatype: "electricvoltage"
+      properties:
+        - name: "Pset_ElectricApplianceTypeCommon.Status"
+          datatype: "string"
           presence: "required"`,
   },
   architectural: {
@@ -107,7 +122,7 @@ const examples = {
   date: "2025-01-15"
   ifcVersion: "IFC4"
   rules:
-    - name: "IfcWindow – Thermal Performance"
+    - name: "IfcWindow - Thermal Performance"
       entity: "IfcWindow"
       attributes:
         - name: "Name"
@@ -115,14 +130,17 @@ const examples = {
           presence: "required"
       properties:
         - name: "Pset_WindowCommon.ThermalTransmittance"
-          datatype: "thermaltransmittance"
+          datatype: "number"
           presence: "required"
       quantities:
         - name: "Qto_WindowBaseQuantities.Area"
           datatype: "area"
           presence: "required"
-    - name: "IfcDoor – Security & Fire"
+    - name: "IfcDoor - Security & Fire (Internal)"
       entity: "IfcDoor"
+      classifications: # Applicability: only internal doors
+        - system: "Uniclass"
+          value: "EF_25_30_40_40" # Internal doorsets
       properties:
         - name: "Pset_DoorCommon.FireRating"
           datatype: "string"
@@ -140,8 +158,20 @@ export function EditorShell() {
       : (localStorage.getItem("idsLightSource") ?? examples.basic.yaml),
   )
   const [status, setStatus] = useState<ConvertStatus>("idle")
-  const [xml, setXml] = useState<string>("")
-  const [readable, setReadable] = useState<any>(null)
+  const [xml, setXml] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    return sessionStorage.getItem('idsLightXml') ?? '';
+  });
+  const [readable, setReadable] = useState<any>(() => {
+    if (typeof window === 'undefined') return null;
+    const stored = sessionStorage.getItem('idsLightReadable');
+    try {
+      return stored ? JSON.parse(stored) : null;
+    } catch (e) {
+      console.error("Failed to parse readable from sessionStorage", e);
+      return null;
+    }
+  });
   const [errors, setErrors] = useState<string[]>([])
   const [outputView, setOutputView] = useState<"xml" | "readable" | "validation">("xml")
   const [copyStatus, setCopyStatus] = useState<"idle" | "success" | "error">("idle")
@@ -150,17 +180,21 @@ export function EditorShell() {
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const [showExamples, setShowExamples] = useState(false)
+  const [hydrated, setHydrated] = useState(false);
 
   const [splitRatio, setSplitRatio] = useState(50) // percentage for left panel
   const [isDragging, setIsDragging] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const workerRef = useRef<Worker | null>(null)
 
   const [validationResult, setValidationResult] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [lastValidatedXml, setLastValidatedXml] = useState<string>('');
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme")
@@ -229,11 +263,17 @@ export function EditorShell() {
   }, [xml, showShortcuts, toggleTheme]) // Added toggleTheme to dependency array
 
   useEffect(() => {
-    console.log("[v0] Initializing worker...")
-    const w = new Worker(new URL("/workers/idsWorker.js", window.location.origin))
+    if (process.env.NODE_ENV !== 'production') {
+      console.log("Initializing worker...")
+    }
+    const prefix = (window as any).__NEXT_DATA__?.assetPrefix ?? process.env.NEXT_PUBLIC_BASE_PATH ?? '';
+    const w = new Worker(`${prefix}/workers/idsWorker.js`, { type: 'module' });
     workerRef.current = w
+
     w.onmessage = (e: MessageEvent<{ ok: boolean; xml?: string; readable?: any; errors?: string[] }>) => {
-      console.log("[v0] Worker response:", e.data)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log("Worker response:", e.data)
+      }
       if (!e.data.ok) {
         setStatus("invalid")
         setErrors(e.data.errors ?? ["Unknown error"])
@@ -246,13 +286,32 @@ export function EditorShell() {
         setReadable(e.data.readable || null)
       }
     }
-    console.log("[v0] Sending initial conversion...")
-    w.postMessage({ type: "convert", text: source })
+
     return () => {
-      w.terminate()
-      workerRef.current = null
+      if (workerRef.current) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log("Terminating worker...")
+        }
+        workerRef.current.terminate()
+        workerRef.current = null
+      }
     }
-  }, [])
+  }, []) // Empty dependency array ensures this runs only on mount and unmount
+
+  useEffect(() => {
+    // This effect handles the initial conversion and any subsequent changes to the source.
+    if (hydrated && source && workerRef.current) {
+      setStatus((s) => (s === "idle" ? "idle" : "processing"))
+      const t = setTimeout(() => {
+        setStatus("processing")
+        if (process.env.NODE_ENV !== 'production') {
+          console.log("Sending conversion request...")
+        }
+        workerRef.current?.postMessage({ type: "convert", text: source })
+      }, 250)
+      return () => clearTimeout(t)
+    }
+  }, [source, hydrated]) // It runs whenever the source code changes.
 
   useEffect(() => {
     localStorage.setItem("idsLightSource", source)
@@ -260,14 +319,17 @@ export function EditorShell() {
   }, [source])
 
   useEffect(() => {
-    setStatus((s) => (s === "idle" ? "idle" : "processing"))
-    const t = setTimeout(() => {
-      setStatus("processing")
-      console.log("[v0] Sending conversion request...")
-      workerRef.current?.postMessage({ type: "convert", text: source })
-    }, 250)
-    return () => clearTimeout(t)
-  }, [source])
+    if (xml) {
+      sessionStorage.setItem("idsLightXml", xml)
+    } else {
+      sessionStorage.removeItem("idsLightXml")
+    }
+    if (readable) {
+      sessionStorage.setItem("idsLightReadable", JSON.stringify(readable))
+    } else {
+      sessionStorage.removeItem("idsLightReadable")
+    }
+  }, [xml, readable])
 
   // Auto-validate when switching to validation tab
   useEffect(() => {
@@ -550,7 +612,7 @@ export function EditorShell() {
   return (
     <div className="h-screen flex flex-col bg-background text-foreground transition-colors duration-300">
       <header className="px-4 py-3 border-b flex items-center justify-between bg-card border-border">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -561,6 +623,16 @@ export function EditorShell() {
             </svg>
             <span className="font-semibold tracking-tight">IDS-Light Editor</span>
           </div>
+          <a
+            href="/docs"
+            className="text-xs px-3 py-1.5 bg-primary/10 text-primary rounded-md hover:bg-primary/20 transition-colors flex items-center gap-1.5"
+            title="View documentation"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+            Docs
+          </a>
           {lastSaved && (
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -656,24 +728,11 @@ export function EditorShell() {
 
       <div className="flex-1 flex overflow-hidden" ref={containerRef}>
         <div style={{ width: `${splitRatio}%` }} className="border-r border-border">
-          <div className="h-full flex flex-col">
-            <div className="px-4 py-2 border-b border-border bg-card">
-              <div className="flex items-center justify-between min-h-[32px]">
-                <span className="text-sm font-medium">Input (YAML/JSON)</span>
-              </div>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <textarea
-                ref={textareaRef}
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-                className="w-full h-full p-4 font-mono text-sm resize-none border-0 outline-none bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20 transition-all duration-200 scrollbar-thin"
-                placeholder="Enter your IDS-Light YAML or JSON here..."
-                aria-label="IDS-Light source code input"
-                spellCheck={false}
-              />
-            </div>
-          </div>
+          <EditorPane
+            source={source}
+            onChange={setSource}
+            status={status}
+          />
         </div>
 
         <div
@@ -706,9 +765,9 @@ export function EditorShell() {
                   <div className="flex bg-muted rounded-md p-1">
                     <button
                       onClick={() => setOutputView("xml")}
-                      className={`px-3 py-1 text-xs rounded transition-all duration-200 ${outputView === "xml"
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
+                      className={`px-3 py-1 text-xs rounded-md font-medium transition-all duration-200 ${outputView === "xml"
+                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 shadow-sm"
+                        : "text-muted-foreground hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-900/20 dark:hover:text-blue-300"
                         }`}
                       aria-pressed={outputView === "xml"}
                     >
@@ -716,9 +775,9 @@ export function EditorShell() {
                     </button>
                     <button
                       onClick={() => setOutputView("readable")}
-                      className={`px-3 py-1 text-xs rounded transition-all duration-200 ${outputView === "readable"
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
+                      className={`px-3 py-1 text-xs rounded-md font-medium transition-all duration-200 ${outputView === "readable"
+                        ? "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300 shadow-sm"
+                        : "text-muted-foreground hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-900/20 dark:hover:text-green-300"
                         }`}
                       aria-pressed={outputView === "readable"}
                     >
@@ -726,9 +785,9 @@ export function EditorShell() {
                     </button>
                     <button
                       onClick={() => setOutputView("validation")}
-                      className={`px-3 py-1 text-xs rounded transition-all duration-200 ${outputView === "validation"
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
+                      className={`px-3 py-1 text-xs rounded-md font-medium transition-all duration-200 ${outputView === "validation"
+                        ? "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 shadow-sm"
+                        : "text-muted-foreground hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-900/20 dark:hover:text-amber-300"
                         }`}
                       aria-pressed={outputView === "validation"}
                     >
@@ -736,50 +795,18 @@ export function EditorShell() {
                     </button>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={onCopyXml}
-                    disabled={!xml || copyStatus === "success"}
-                    className={`text-xs px-3 py-1.5 rounded-md transition-all duration-200 flex items-center gap-1.5 font-medium focus:ring-2 focus:ring-primary/20 ${copyStatus === "success"
-                      ? "bg-green-500 text-white"
-                      : copyStatus === "error"
-                        ? "bg-destructive text-destructive-foreground"
-                        : downloadStatus === "downloading"
-                          ? "bg-green-400 text-white cursor-wait"
-                          : !xml
-                            ? "bg-muted text-muted-foreground cursor-not-allowed"
-                            : "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80"
-                      }`}
-                    title="Copy XML (Ctrl+Shift+C)"
-                    aria-label="Copy generated XML to clipboard"
-                  >
-                    {getCopyButtonContent()}
-                  </button>
-                  <button
-                    onClick={onDownloadXml}
-                    disabled={!xml || downloadStatus === "downloading" || downloadStatus === "success"}
-                    className={`text-xs px-3 py-1.5 rounded-md transition-all duration-200 flex items-center gap-1.5 font-medium focus:ring-2 focus:ring-primary/20 ${downloadStatus === "success"
-                      ? "bg-green-500 text-white"
-                      : downloadStatus === "error"
-                        ? "bg-destructive text-destructive-foreground"
-                        : downloadStatus === "downloading"
-                          ? "bg-green-400 text-white cursor-wait"
-                          : !xml
-                            ? "bg-muted text-muted-foreground cursor-not-allowed"
-                            : "bg-green-500 text-white hover:bg-green-600 active:bg-green-700"
-                      }`}
-                    title="Download XML (Ctrl+Shift+D)"
-                    aria-label="Download generated XML file"
-                  >
-                    {getDownloadButtonContent()}
-                  </button>
-                </div>
               </div>
             </div>
 
             <div className="flex-1 overflow-auto scrollbar-thin">
               <div className="p-4">
-                {errors.length > 0 && (
+                {!hydrated && (
+                  <div className="flex items-center justify-center h-full">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                )}
+
+                {hydrated && errors.length > 0 && (
                   <div className="mb-4 animate-in slide-in-from-top-2 duration-300">
                     <h3 className="text-sm font-medium text-destructive mb-2 flex items-center gap-2">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -803,125 +830,255 @@ export function EditorShell() {
                   </div>
                 )}
 
-                {outputView === "xml" && xml && (
-                  <div className="animate-in fade-in duration-300">
-                    <h3 className="text-sm font-medium mb-2 text-foreground">Generated IDS XML:</h3>
-                    <pre className="text-xs bg-muted p-4 rounded-md border border-border font-mono leading-relaxed text-foreground scrollbar-thin whitespace-pre-wrap">
-                      {xml}
-                    </pre>
+                {hydrated && outputView === "xml" && (
+                  <div className="animate-in fade-in duration-300 -m-4 h-[calc(100vh-200px)]">
+                    <XmlViewer
+                      xml={xml}
+                      onCopy={onCopyXml}
+                      onDownload={onDownloadXml}
+                      copyStatus={copyStatus}
+                      downloadStatus={downloadStatus}
+                    />
                   </div>
                 )}
 
-                {outputView === "readable" && readable && (
-                  <div className="animate-in fade-in duration-300">
-                    <h3 className="text-sm font-medium mb-2 text-foreground">Parsed Structure:</h3>
-                    <div className="text-xs bg-primary/5 p-4 rounded-md border border-primary/20">
-                      <div className="space-y-3">
-                        <div>
-                          <div className="font-semibold text-primary mb-1">Document Info:</div>
-                          <div className="ml-2 space-y-1">
-                            <div>
-                              <span className="font-medium">Title:</span> {readable.ids?.title || "Not specified"}
-                            </div>
-                            <div>
-                              <span className="font-medium">Description:</span>{" "}
-                              {readable.ids?.description || "Not specified"}
-                            </div>
-                            <div>
-                              <span className="font-medium">Author:</span> {readable.ids?.author || "Not specified"}
-                            </div>
-                            <div>
-                              <span className="font-medium">Date:</span> {readable.ids?.date || "Not specified"}
-                            </div>
-                            <div>
-                              <span className="font-medium">IFC Version:</span>{" "}
-                              {readable.ids?.ifcVersion || "Not specified"}
-                            </div>
+                {hydrated && outputView === "readable" && readable && (
+                  <div className="animate-in fade-in duration-300 h-full flex flex-col">
+                    <h3 className="text-sm font-medium mb-4 text-foreground flex items-center gap-2 flex-shrink-0">
+                      <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Parsed Structure
+                    </h3>
+                    <div className="space-y-4 flex-1 overflow-auto scrollbar-thin pr-2">
+                      <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <div className="font-semibold text-blue-700 dark:text-blue-300 mb-3 flex items-center gap-2">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Document Info
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                          <div className="flex items-start gap-2">
+                            <span className="font-medium text-purple-600 dark:text-purple-400 min-w-0 flex-shrink-0">Title:</span>
+                            <span className="text-gray-800 dark:text-gray-200 font-medium">{readable.ids?.title || "Not specified"}</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <span className="font-medium text-purple-600 dark:text-purple-400 min-w-0 flex-shrink-0">Author:</span>
+                            <span className="text-gray-800 dark:text-gray-200">{readable.ids?.author || "Not specified"}</span>
+                          </div>
+                          <div className="flex items-start gap-2 md:col-span-2">
+                            <span className="font-medium text-purple-600 dark:text-purple-400 min-w-0 flex-shrink-0">Description:</span>
+                            <span className="text-gray-800 dark:text-gray-200">{readable.ids?.description || "Not specified"}</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <span className="font-medium text-purple-600 dark:text-purple-400 min-w-0 flex-shrink-0">Date:</span>
+                            <span className="text-gray-800 dark:text-gray-200">{readable.ids?.date || "Not specified"}</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <span className="font-medium text-purple-600 dark:text-purple-400 min-w-0 flex-shrink-0">IFC Version:</span>
+                            <span className="text-orange-600 dark:text-orange-400 font-medium">{readable.ids?.ifcVersion || "Not specified"}</span>
                           </div>
                         </div>
+                      </div>
 
-                        {readable.ids?.rules && readable.ids.rules.length > 0 && (
-                          <div>
-                            <div className="font-semibold text-primary mb-1">Rules ({readable.ids.rules.length}):</div>
-                            <div className="ml-2 space-y-2">
-                              {readable.ids.rules.map((rule: any, i: number) => (
-                                <div
-                                  key={i}
-                                  className="bg-card p-3 rounded-md border border-border animate-in slide-in-from-bottom-2 duration-300"
-                                  style={{ animationDelay: `${i * 100}ms` }}
-                                >
-                                  <div className="font-medium text-foreground">
-                                    {i + 1}. {rule.name || "Unnamed Rule"}
+                      {readable.ids?.rules && readable.ids.rules.length > 0 && (
+                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                          <div className="font-semibold text-green-700 dark:text-green-300 mb-4 flex items-center gap-2">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Rules ({readable.ids.rules.length})
+                          </div>
+                          <div className="space-y-4">
+                            {readable.ids.rules.map((rule: any, i: number) => (
+                              <div
+                                key={i}
+                                className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm animate-in slide-in-from-bottom-2 duration-300"
+                                style={{ animationDelay: `${i * 100}ms` }}
+                              >
+                                <div className="flex items-start gap-3 mb-3">
+                                  <span className="flex-shrink-0 w-6 h-6 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center text-xs font-bold">
+                                    {i + 1}
+                                  </span>
+                                  <div className="flex-1">
+                                    <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
+                                      {rule.name || "Unnamed Rule"}
+                                    </h4>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <span className="text-xs font-medium text-purple-600 dark:text-purple-400">Entity:</span>
+                                      <span className="text-xs bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 px-2 py-0.5 rounded-full font-medium">
+                                        {rule.entity}
+                                      </span>
+                                    </div>
                                   </div>
-                                  <div className="text-muted-foreground text-xs mt-1">
-                                    <span className="font-medium">Entity:</span> {rule.entity}
-                                  </div>
-                                  {rule.attributes && rule.attributes.length > 0 && (
-                                    <div className="mt-1">
-                                      <span className="font-medium text-xs">Attributes:</span>
-                                      <ul className="ml-2 text-xs">
-                                        {rule.attributes.map((attr: any, j: number) => (
-                                          <li key={j}>
-                                            • {attr.name} ({attr.datatype}, {attr.presence})
-                                          </li>
+                                </div>
+                                <div className="space-y-3">
+                                  {rule.requiredPartOf && rule.requiredPartOf.length > 0 && (
+                                    <div>
+                                      <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 mb-2">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                        </svg>
+                                        Required Part Of:
+                                      </span>
+                                      <div className="flex flex-wrap gap-1">
+                                        {rule.requiredPartOf.map((part: any, j: number) => (
+                                          <span key={j} className="text-xs bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded-md">
+                                            {part.entity}
+                                          </span>
                                         ))}
-                                      </ul>
+                                      </div>
+                                    </div>
+                                  )}
+                                  {rule.requiredMaterials && rule.requiredMaterials.length > 0 && (
+                                    <div>
+                                      <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1 mb-2">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                                        </svg>
+                                        Required Materials:
+                                      </span>
+                                      <div className="flex flex-wrap gap-1">
+                                        {rule.requiredMaterials.map((mat: any, j: number) => (
+                                          <span key={j} className="text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 px-2 py-1 rounded-md">
+                                            {mat.value}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {rule.partOf && rule.partOf.length > 0 && (
+                                    <div>
+                                      <span className="text-xs font-semibold text-cyan-600 dark:text-cyan-400 flex items-center gap-1 mb-2">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                                        </svg>
+                                        Part Of:
+                                      </span>
+                                      <div className="flex flex-wrap gap-1">
+                                        {rule.partOf.map((part: any, j: number) => (
+                                          <span key={j} className="text-xs bg-cyan-100 dark:bg-cyan-900 text-cyan-700 dark:text-cyan-300 px-2 py-1 rounded-md">
+                                            {part.entity}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {rule.classifications && rule.classifications.length > 0 && (
+                                    <div>
+                                      <span className="text-xs font-semibold text-pink-600 dark:text-pink-400 flex items-center gap-1 mb-2">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                        </svg>
+                                        Classifications:
+                                      </span>
+                                      <div className="space-y-1">
+                                        {rule.classifications.map((classif: any, j: number) => (
+                                          <div key={j} className="text-xs bg-pink-50 dark:bg-pink-900/20 border border-pink-200 dark:border-pink-800 px-2 py-1 rounded-md">
+                                            <span className="font-medium text-pink-700 dark:text-pink-300">{classif.system}:</span>
+                                            <span className="text-pink-600 dark:text-pink-400 ml-1">{classif.value}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {rule.attributes && rule.attributes.length > 0 && (
+                                    <div>
+                                      <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mb-2">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        Attributes:
+                                      </span>
+                                      <div className="space-y-1">
+                                        {rule.attributes.map((attr: any, j: number) => (
+                                          <div key={j} className="text-xs bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-2 py-1 rounded-md flex items-center justify-between">
+                                            <span className="font-medium text-emerald-700 dark:text-emerald-300">{attr.name}</span>
+                                            <div className="flex gap-1">
+                                              <span className="bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200 px-1 py-0.5 rounded text-xs">{attr.datatype}</span>
+                                              <span className="bg-emerald-300 dark:bg-emerald-700 text-emerald-900 dark:text-emerald-100 px-1 py-0.5 rounded text-xs">{attr.presence}</span>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
                                     </div>
                                   )}
                                   {rule.properties && rule.properties.length > 0 && (
-                                    <div className="mt-1">
-                                      <span className="font-medium text-xs">Properties:</span>
-                                      <ul className="ml-2 text-xs">
+                                    <div>
+                                      <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1 mb-2">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        </svg>
+                                        Properties:
+                                      </span>
+                                      <div className="space-y-1">
                                         {rule.properties.map((prop: any, j: number) => (
-                                          <li key={j}>
-                                            • {prop.name} ({prop.datatype}, {prop.presence})
-                                          </li>
+                                          <div key={j} className="text-xs bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-2 py-1 rounded-md flex items-center justify-between">
+                                            <span className="font-medium text-blue-700 dark:text-blue-300">{prop.name}</span>
+                                            <div className="flex gap-1">
+                                              <span className="bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200 px-1 py-0.5 rounded text-xs">{prop.datatype}</span>
+                                              <span className="bg-blue-300 dark:bg-blue-700 text-blue-900 dark:text-blue-100 px-1 py-0.5 rounded text-xs">{prop.presence}</span>
+                                            </div>
+                                          </div>
                                         ))}
-                                      </ul>
+                                      </div>
                                     </div>
                                   )}
                                   {rule.quantities && rule.quantities.length > 0 && (
-                                    <div className="mt-1">
-                                      <span className="font-medium text-xs">Quantities:</span>
-                                      <ul className="ml-2 text-xs">
+                                    <div>
+                                      <span className="text-xs font-semibold text-violet-600 dark:text-violet-400 flex items-center gap-1 mb-2">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                        </svg>
+                                        Quantities:
+                                      </span>
+                                      <div className="space-y-1">
                                         {rule.quantities.map((qty: any, j: number) => (
-                                          <li key={j}>
-                                            • {qty.name} ({qty.datatype}, {qty.presence})
-                                          </li>
+                                          <div key={j} className="text-xs bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 px-2 py-1 rounded-md flex items-center justify-between">
+                                            <span className="font-medium text-violet-700 dark:text-violet-300">{qty.name}</span>
+                                            <div className="flex gap-1">
+                                              <span className="bg-violet-200 dark:bg-violet-800 text-violet-800 dark:text-violet-200 px-1 py-0.5 rounded text-xs">{qty.datatype}</span>
+                                              <span className="bg-violet-300 dark:bg-violet-700 text-violet-900 dark:text-violet-100 px-1 py-0.5 rounded text-xs">{qty.presence}</span>
+                                            </div>
+                                          </div>
                                         ))}
-                                      </ul>
+                                      </div>
                                     </div>
                                   )}
                                 </div>
-                              ))}
-                            </div>
+                              </div>
+                            ))}
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
 
-                {outputView === "validation" && (
-                  <div className="animate-in fade-in duration-300">
-                    <h3 className="text-sm font-medium mb-2 text-foreground">Validation Results:</h3>
-                    {isValidating ? (
-                      <div className="flex items-center justify-center h-32">
-                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                      </div>
-                    ) : validationResult ? (
-                      <pre className="text-xs bg-muted p-4 rounded-md border border-border font-mono leading-relaxed text-foreground scrollbar-thin whitespace-pre-wrap">
-                        {validationResult}
-                      </pre>
-                    ) : (
-                      <div className="text-sm text-muted-foreground flex items-center justify-center h-32">
-                        Click Validate to check XML
-                      </div>
-                    )}
+                {hydrated && outputView === "validation" && (
+                  <div className="animate-in fade-in duration-300 h-full flex flex-col">
+                    <h3 className="text-sm font-medium mb-2 text-foreground flex-shrink-0">Validation Results:</h3>
+                    <div className="flex-1 overflow-auto scrollbar-thin">
+                      {isValidating ? (
+                        <div className="flex items-center justify-center h-32">
+                          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                        </div>
+                      ) : validationResult ? (
+                        <pre className="text-xs bg-muted p-4 rounded-md border border-border font-mono leading-relaxed text-foreground scrollbar-thin whitespace-pre overflow-auto max-w-full">
+                          {validationResult}
+                        </pre>
+                      ) : (
+                        <div className="text-sm text-muted-foreground flex items-center justify-center h-32">
+                          Open this tab to run validation. Results will appear here.
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
-                {!xml && !readable && status === "valid" && (
+                {hydrated && !xml && !readable && status === "valid" && (
                   <div className="text-muted-foreground text-sm flex items-center justify-center h-32">
                     No output generated yet.
                   </div>
@@ -934,8 +1091,39 @@ export function EditorShell() {
 
       <footer className="px-4 py-3 border-t border-border bg-card">
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <div>IDS-Light to IDS XML Converter</div>
-          <div>Made with ❤️ by Louis Trümpler</div>
+          <div className="flex items-center gap-4">
+            <span>IDS-Light to IDS XML Converter</span>
+            <a
+              href="https://github.com/louistrue/ids-light-editor"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 hover:text-foreground"
+            >
+              <Github className="w-4 h-4" />
+              Source
+            </a>
+          </div>
+          <div className="flex items-center gap-4">
+            <a
+              href="https://www.gnu.org/licenses/agpl-3.0.en.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-foreground"
+            >
+              AGPL-3.0
+            </a>
+            <span>
+              Made with ❤️ by{" "}
+              <a
+                href="https://www.lt.plus"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-foreground"
+              >
+                Louis Trümpler
+              </a>
+            </span>
+          </div>
         </div>
       </footer>
     </div>

@@ -123,6 +123,7 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
@@ -145,6 +146,40 @@
 
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground));
+}
+
+/* Prevent layout shift on code blocks and long lines */
+.docs pre {
+  max-width: 100%;
+  overflow: auto;
+  white-space: pre;
+}
+
+/* Make inline code blocks wrap nicely inside paragraphs */
+.docs code {
+  word-break: break-word;
+}
+
+/* Tables: enable horizontal scroll if overflow */
+.docs table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* Cards and sections: avoid overflow clipping rounded borders */
+.docs .rounded,
+.docs .rounded-lg,
+.docs .rounded-md {
+  overflow: hidden;
+}
+
+/* Improve readability of long YAML comments on small screens */
+@media (max-width: 640px) {
+  .docs pre {
+    font-size: 11px;
+    line-height: 1.4;
+  }
 }
 
 /* Added Tokyo Night syntax highlighting colors for code areas */

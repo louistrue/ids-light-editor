@@ -2,6 +2,7 @@
 
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { MonacoEditor } from "./MonacoEditor"
 
 type EditorPaneProps = {
   source: string
@@ -30,14 +31,12 @@ export function EditorPane({ source, onChange, status }: EditorPaneProps) {
         <Badge variant={getStatusVariant()}>{status}</Badge>
       </div>
       <Card className="m-4 h-[calc(100%-64px)] p-0 overflow-hidden">
-        {/* Monaco placeholder surface; keep as plain div now */}
-        <div className="h-full bg-muted/30 border-border/60 border rounded-md">
-          {/* Replace with <Monaco /> later; for now allow simple textarea: */}
-          <textarea
-            className="w-full h-full bg-transparent p-3 outline-none resize-none text-sm font-mono leading-relaxed"
-            defaultValue={source}
-            onChange={(e) => onChange?.(e.target.value)}
+        <div className="h-full bg-muted/30 border-border/60 border rounded-md overflow-hidden">
+          <MonacoEditor
+            value={source}
+            onChange={(value) => onChange?.(value)}
             placeholder="Enter your IDS-Light YAML or JSON configuration here..."
+            className="h-full w-full"
           />
         </div>
       </Card>
