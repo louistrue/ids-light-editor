@@ -3,10 +3,7 @@
 import type React from "react"
 
 import { useEffect, useRef, useState, useCallback } from "react"
-import { Loader2, Github } from 'lucide-react';
-import { ThemeToggle } from "@/components/theme-toggle"
-import { EditorPane } from "./EditorPane";
-import { XmlViewer } from "./XmlViewer";
+import { Loader2 } from 'lucide-react';
 
 type ConvertStatus = "idle" | "processing" | "valid" | "invalid"
 
@@ -191,6 +188,10 @@ export function EditorShell() {
   const [validationResult, setValidationResult] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [lastValidatedXml, setLastValidatedXml] = useState<string>('');
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
 
   useEffect(() => {
     setHydrated(true);
