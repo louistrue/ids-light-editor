@@ -182,13 +182,13 @@
   }
 }
 
-/* Added Tokyo Night syntax highlighting colors for code areas */
+/* Monaco Editor styling - Let Monaco handle its own theme colors */
 .dark .monaco-editor-background {
-  background-color: hsl(var(--background)) !important;
+  background-color: #0F172A !important;
 }
 
 .dark .monaco-editor {
-  --vscode-editor-background: hsl(var(--background));
-  --vscode-editor-foreground: hsl(var(--foreground));
-  --vscode-editorLineNumber-foreground: hsl(var(--muted-foreground));
+  --vscode-editor-background: #0F172A;
+  --vscode-editor-foreground: #F1F5F9;
+  --vscode-editorLineNumber-foreground: #64748B;
 }

@@ -4,6 +4,7 @@ import type React from "react"
 
 import { useEffect, useRef, useState, useCallback } from "react"
 import { Loader2, Github } from 'lucide-react';
+import { ThemeToggle } from "@/components/theme-toggle"
 import { EditorPane } from "./EditorPane";
 import { XmlViewer } from "./XmlViewer";
 
@@ -176,7 +177,6 @@ export function EditorShell() {
   const [outputView, setOutputView] = useState<"xml" | "readable" | "validation">("xml")
   const [copyStatus, setCopyStatus] = useState<"idle" | "success" | "error">("idle")
   const [downloadStatus, setDownloadStatus] = useState<"idle" | "downloading" | "success" | "error">("idle")
-  const [isDarkMode, setIsDarkMode] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const [showExamples, setShowExamples] = useState(false)
@@ -197,24 +197,6 @@ export function EditorShell() {
   }, []);
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem("theme")
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches
-    const shouldUseDark = savedTheme === "dark" || (!savedTheme && prefersDark)
-
-    setIsDarkMode(shouldUseDark)
-    document.documentElement.classList.toggle("dark", shouldUseDark)
-  }, [])
-
-  const toggleTheme = useCallback(() => {
-    setIsDarkMode((prev) => {
-      const newDarkMode = !prev
-      document.documentElement.classList.toggle("dark", newDarkMode)
-      localStorage.setItem("theme", newDarkMode ? "dark" : "light")
-      return newDarkMode
-    })
-  }, [])
-
-  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ctrl+Shift+C to copy XML (was Ctrl+S)
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "C") {
@@ -232,12 +214,6 @@ export function EditorShell() {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "H") {
         e.preventDefault()
         setShowShortcuts(!showShortcuts)
-      }
-
-      // Ctrl+Shift+T to toggle theme (was Ctrl+T)
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "T") {
-        e.preventDefault()
-        toggleTheme()
       }
 
       // Ctrl+Shift+1/2 to switch output views (was Ctrl+1/2)
@@ -260,7 +236,7 @@ export function EditorShell() {
 
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [xml, showShortcuts, toggleTheme]) // Added toggleTheme to dependency array
+  }, [xml, showShortcuts])
 
   useEffect(() => {
     if (process.env.NODE_ENV !== 'production') {
@@ -673,6 +649,7 @@ export function EditorShell() {
             )}
           </div>
         </div>
+        <ThemeToggle />
       </header>
 
       {showShortcuts && (
@@ -700,8 +677,8 @@ export function EditorShell() {
                 <kbd className="px-2 py-1 bg-muted rounded text-xs">Ctrl+Shift+D</kbd>
               </div>
               <div className="flex justify-between">
-                <span>Toggle Theme</span>
-                <kbd className="px-2 py-1 bg-muted rounded text-xs">Ctrl+Shift+T</kbd>
+                <span>Show Shortcuts</span>
+                <kbd className="px-2 py-1 bg-muted rounded text-xs">Ctrl+Shift+H</kbd>
               </div>
               <div className="flex justify-between">
                 <span>XML View</span>
@@ -710,10 +687,6 @@ export function EditorShell() {
               <div className="flex justify-between">
                 <span>Structure View</span>
                 <kbd className="px-2 py-1 bg-muted rounded text-xs">Ctrl+Shift+2</kbd>
-              </div>
-              <div className="flex justify-between">
-                <span>Show Shortcuts</span>
-                <kbd className="px-2 py-1 bg-muted rounded text-xs">Ctrl+Shift+H</kbd>
               </div>
             </div>
             <button
