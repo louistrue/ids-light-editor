@@ -31,7 +31,10 @@ const PROPERTY_SETS = [
 const ROOT_KEYS = ['ids', 'rules', 'title', 'description', 'version', 'author', 'date', 'purpose', 'milestone', 'copyright', 'license'];
 
 // Facet keys
-const FACET_KEYS = ['applicability', 'requirements', 'entity', 'attribute', 'property', 'material', 'classification', 'partOf'];
+const FACET_KEYS = [
+    'applicability', 'requirements', 'entity', 'attribute', 'property',
+    'material', 'materials', 'classification', 'classifications', 'partOf', 'requiredPartOf'
+];
 
 // Property keys
 const PROPERTY_KEYS = [
@@ -128,8 +131,8 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
                     // Property sets (Pset_Common, etc.)
                     [/\bPset_[a-zA-Z0-9_]*\.[a-zA-Z0-9_]*\b/, 'type.pset'],
 
-                    // Facet keys (requiredPartOf, classifications, materials, etc.)
-                    [/^(\s*)(requiredPartOf|classifications|materials|partOf|applicability|requirements)(\s*)(:)/,
+                    // Facet keys (support singular and plural)
+                    [/^(\s*)(requiredPartOf|partOf|classification|classifications|material|materials|applicability|requirements)(\s*)(:)/,
                         ['', 'key.facet', '', 'delimiter']],
 
                     // Property keys (name, datatype, presence, etc.)
@@ -352,8 +355,8 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
                             name: 'IDS Specification',
                             detail: 'Root IDS definition',
                             kind: monaco.languages.SymbolKind.Namespace,
-                            range: new monaco.Range(lineNumber, 1, lineNumber, line.length),
-                            selectionRange: new monaco.Range(lineNumber, 1, lineNumber, line.length),
+                            range: new monaco.Range(lineNumber, 1, lineNumber, line.length + 1),
+                            selectionRange: new monaco.Range(lineNumber, 1, lineNumber, line.length + 1),
                             tags: []
                         });
                     } else if (trimmedLine.startsWith('rules:')) {
@@ -361,8 +364,8 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
                             name: 'Rules',
                             detail: 'IDS Rules collection',
                             kind: monaco.languages.SymbolKind.Array,
-                            range: new monaco.Range(lineNumber, 1, lineNumber, line.length),
-                            selectionRange: new monaco.Range(lineNumber, 1, lineNumber, line.length),
+                            range: new monaco.Range(lineNumber, 1, lineNumber, line.length + 1),
+                            selectionRange: new monaco.Range(lineNumber, 1, lineNumber, line.length + 1),
                             tags: []
                         });
                     } else if (trimmedLine.startsWith('- ') && (trimmedLine.includes('applicability:') || trimmedLine.includes('requirements:'))) {
@@ -371,8 +374,8 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
                             name: ruleName,
                             detail: 'IDS Rule',
                             kind: monaco.languages.SymbolKind.Object,
-                            range: new monaco.Range(lineNumber, 1, lineNumber, line.length),
-                            selectionRange: new monaco.Range(lineNumber, 1, lineNumber, line.length),
+                            range: new monaco.Range(lineNumber, 1, lineNumber, line.length + 1),
+                            selectionRange: new monaco.Range(lineNumber, 1, lineNumber, line.length + 1),
                             tags: []
                         });
                     }
@@ -388,20 +391,29 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
                 const actions: monaco.languages.CodeAction[] = [];
 
                 // Add quick fix for missing required properties
-                const line = model.getLineContent(range.startLineNumber);
-                if (line.includes('entity:') && !line.includes('name:')) {
+                const lineContent = model.getLineContent(range.startLineNumber);
+                if (lineContent.includes('entity:') && !lineContent.includes('name:')) {
+                    const baseIndent = (lineContent.match(/^(\s*)/)?.[1] ?? '');
+                    const indent = baseIndent + '  ';
                     actions.push({
                         title: 'Add entity name property',
                         kind: 'quickfix',
                         edit: {
-                            edits: [{
-                                resource: model.uri,
-                                versionId: model.getVersionId(),
-                                textEdit: {
-                                    range: new monaco.Range(range.endLineNumber, 1, range.endLineNumber, 1),
-                                    text: '        name: \n'
+                            edits: [
+                                {
+                                    resource: model.uri,
+                                    textEdit: {
+                                        range: new monaco.Range(
+                                            range.endLineNumber,
+                                            model.getLineMaxColumn(range.endLineNumber),
+                                            range.endLineNumber,
+                                            model.getLineMaxColumn(range.endLineNumber)
+                                        ),
+                                        text: `\n${indent}name: `
+                                    },
+                                    versionId: model.getVersionId()
                                 }
-                            }]
+                            ]
                         }
                     });
                 }
@@ -553,6 +565,14 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
                         range
                     },
                     {
+                        label: 'classifications-facet',
+                        kind: monaco.languages.CompletionItemKind.Snippet,
+                        insertText: ['classifications:', '  - system: ${1:"Uniclass"}', '    value: ${2:"Pr_20_93_96_56"}'].join('\n'),
+                        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                        documentation: 'Classifications facet',
+                        range
+                    },
+                    {
                         label: 'material-facet',
                         kind: monaco.languages.CompletionItemKind.Snippet,
                         insertText: [
@@ -562,6 +582,14 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
                         ].join('\n'),
                         insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                         documentation: 'Material facet',
+                        range
+                    },
+                    {
+                        label: 'materials-facet',
+                        kind: monaco.languages.CompletionItemKind.Snippet,
+                        insertText: ['materials:', '  - name: ${1:"Concrete"}', '    category: ${2:"Structural"}'].join('\n'),
+                        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                        documentation: 'Materials facet',
                         range
                     }
                 ];

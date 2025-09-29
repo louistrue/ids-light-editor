@@ -904,7 +904,6 @@ export default function DocsPage() {
       classifications:
         - system: "Uniclass"
           value: "EF_25_11" # External wall systems
-          presence: "required"
 `} />
                         </div>
 

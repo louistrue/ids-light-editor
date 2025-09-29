@@ -263,12 +263,17 @@ export function EditorShell() {
   }, [xml, showShortcuts, toggleTheme]) // Added toggleTheme to dependency array
 
   useEffect(() => {
-    console.log("Initializing worker...")
-    const w = new Worker(new URL("/workers/idsWorker.js", window.location.origin))
+    if (process.env.NODE_ENV !== 'production') {
+      console.log("Initializing worker...")
+    }
+    const prefix = (window as any).__NEXT_DATA__?.assetPrefix ?? process.env.NEXT_PUBLIC_BASE_PATH ?? '';
+    const w = new Worker(`${prefix}/workers/idsWorker.js`, { type: 'module' });
     workerRef.current = w
 
     w.onmessage = (e: MessageEvent<{ ok: boolean; xml?: string; readable?: any; errors?: string[] }>) => {
-      console.log("Worker response:", e.data)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log("Worker response:", e.data)
+      }
       if (!e.data.ok) {
         setStatus("invalid")
         setErrors(e.data.errors ?? ["Unknown error"])
@@ -284,7 +289,9 @@ export function EditorShell() {
 
     return () => {
       if (workerRef.current) {
-        console.log("Terminating worker...")
+        if (process.env.NODE_ENV !== 'production') {
+          console.log("Terminating worker...")
+        }
         workerRef.current.terminate()
         workerRef.current = null
       }
@@ -297,7 +304,9 @@ export function EditorShell() {
       setStatus((s) => (s === "idle" ? "idle" : "processing"))
       const t = setTimeout(() => {
         setStatus("processing")
-        console.log("Sending conversion request...")
+        if (process.env.NODE_ENV !== 'production') {
+          console.log("Sending conversion request...")
+        }
         workerRef.current?.postMessage({ type: "convert", text: source })
       }, 250)
       return () => clearTimeout(t)

@@ -337,6 +337,8 @@ export function convertIdsLightToXml(data: IdsLight, opts: ConvertOptions = {}):
     // Add classification constraints
     for (const classification of rule.classifications || []) {
       const classNode = appl.ele("ids:classification")
+      if (classification.uri) classNode.att("uri", classification.uri)
+      if (classification.instructions) classNode.att("instructions", classification.instructions)
       if (classification.value) idsSimple(classNode, "ids:value", classification.value)
       idsSimple(classNode, "ids:system", classification.system)
     }
@@ -344,6 +346,8 @@ export function convertIdsLightToXml(data: IdsLight, opts: ConvertOptions = {}):
     // Add material constraints
     for (const material of rule.materials || []) {
       const matNode = appl.ele("ids:material")
+      if (material.uri) matNode.att("uri", material.uri)
+      if (material.instructions) matNode.att("instructions", material.instructions)
       if (material.value) idsSimple(matNode, "ids:value", material.value)
     }
 

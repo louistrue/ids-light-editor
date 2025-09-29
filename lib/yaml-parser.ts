@@ -107,7 +107,15 @@ export function parseYAML(yamlStr: string, enableLogging = false): ParseResult {
                 const fieldValue = extractValue(trimmed)
 
                 // Check if this is a section (properties, attributes, quantities, or new facets)
-                if (fieldName === "attributes" || fieldName === "properties" || fieldName === "quantities" ||
+                if (fieldName === "classification") {
+                    // Back-compat: normalize singular `classification` to `classifications` with one item
+                    log("[v0] Normalizing legacy `classification` to `classifications`")
+                    currentSection = "classifications"
+                    if (!Array.isArray(currentRule.classifications)) currentRule.classifications = []
+                    currentItem = {}
+                    currentRule.classifications.push(currentItem)
+                    lineParsed = true
+                } else if (fieldName === "attributes" || fieldName === "properties" || fieldName === "quantities" ||
                     fieldName === "requiredPartOf" || fieldName === "partOf" || fieldName === "classifications" ||
                     fieldName === "materials" || fieldName === "requiredClassifications" || fieldName === "requiredMaterials") {
                     log(`Starting ${fieldName} section`)
