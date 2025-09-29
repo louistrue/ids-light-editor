@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useRef, useEffect } from 'react';
-import Editor from '@monaco-editor/react';
+import Editor, { useMonaco } from '@monaco-editor/react';
 import { useTheme } from 'next-themes';
-import * as monaco from 'monaco-editor';
+import type * as Monaco from 'monaco-editor';
 
 // IDS-Light language definition
 const IDS_LIGHT_LANGUAGE_ID = 'ids-light';
@@ -67,12 +67,11 @@ interface MonacoEditorProps {
 
 export function MonacoEditor({ value, onChange, placeholder, className }: MonacoEditorProps) {
     const { theme } = useTheme();
-    const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+    const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
     const monacoThemeRef = useRef<string | null>(null);
+    const monacoApi = useMonaco();
 
-    const handleEditorDidMount = (editor: monaco.editor.IStandaloneCodeEditor, monaco: typeof import('monaco-editor')) => {
-        editorRef.current = editor;
-
+    const handleBeforeMount = (monaco: typeof Monaco) => {
         // Register IDS-Light as a custom language
         monaco.languages.register({ id: IDS_LIGHT_LANGUAGE_ID });
 
@@ -192,7 +191,7 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
 
         // Intelligent autocompletion provider
         monaco.languages.registerCompletionItemProvider(IDS_LIGHT_LANGUAGE_ID, {
-            provideCompletionItems: (model, position) => {
+            provideCompletionItems: (model: Monaco.editor.ITextModel, position: Monaco.Position) => {
                 const word = model.getWordUntilPosition(position);
                 const range = {
                     startLineNumber: position.lineNumber,
@@ -204,7 +203,7 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
                 const line = model.getLineContent(position.lineNumber);
                 const lineUpToPosition = line.substring(0, position.column - 1);
 
-                const suggestions: monaco.languages.CompletionItem[] = [];
+                const suggestions: Monaco.languages.CompletionItem[] = [];
 
                 // Context-aware suggestions
                 if (lineUpToPosition.trim() === '' || lineUpToPosition.match(/^\s*$/)) {
@@ -305,7 +304,7 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
 
         // Hover provider for documentation
         monaco.languages.registerHoverProvider(IDS_LIGHT_LANGUAGE_ID, {
-            provideHover: (model, position) => {
+            provideHover: (model: Monaco.editor.ITextModel, position: Monaco.Position) => {
                 const word = model.getWordAtPosition(position);
                 if (!word) return null;
 
@@ -342,8 +341,8 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
 
         // Document symbol provider for outline
         monaco.languages.registerDocumentSymbolProvider(IDS_LIGHT_LANGUAGE_ID, {
-            provideDocumentSymbols: (model) => {
-                const symbols: monaco.languages.DocumentSymbol[] = [];
+            provideDocumentSymbols: (model: Monaco.editor.ITextModel) => {
+                const symbols: Monaco.languages.DocumentSymbol[] = [];
                 const lines = model.getLinesContent();
 
                 lines.forEach((line, index) => {
@@ -387,8 +386,8 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
 
         // Code action provider for quick fixes
         monaco.languages.registerCodeActionProvider(IDS_LIGHT_LANGUAGE_ID, {
-            provideCodeActions: (model, range, context) => {
-                const actions: monaco.languages.CodeAction[] = [];
+            provideCodeActions: (model: Monaco.editor.ITextModel, range: Monaco.Range, context: Monaco.languages.CodeActionContext) => {
+                const actions: Monaco.languages.CodeAction[] = [];
 
                 // Add quick fix for missing required properties
                 const lineContent = model.getLineContent(range.startLineNumber);
@@ -422,59 +421,11 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
             }
         });
 
-        // Diagnostic provider for error detection
-        const validateModel = (model: monaco.editor.ITextModel) => {
-            const markers: monaco.editor.IMarkerData[] = [];
-            const lines = model.getLinesContent();
-
-            lines.forEach((line, index) => {
-                const lineNumber = index + 1;
-                const trimmedLine = line.trim();
-
-                // Check for common IDS-Light errors
-                if (trimmedLine.includes('datatype:') && !DATA_TYPES.some(type => trimmedLine.includes(type))) {
-                    const datatypeMatch = trimmedLine.match(/datatype:\s*(.+)/);
-                    if (datatypeMatch) {
-                        markers.push({
-                            severity: monaco.MarkerSeverity.Error,
-                            message: `Invalid datatype '${datatypeMatch[1].trim()}'. Valid types: ${DATA_TYPES.join(', ')}`,
-                            startLineNumber: lineNumber,
-                            startColumn: line.indexOf(datatypeMatch[1]) + 1,
-                            endLineNumber: lineNumber,
-                            endColumn: line.indexOf(datatypeMatch[1]) + datatypeMatch[1].length + 1
-                        });
-                    }
-                }
-
-                if (trimmedLine.includes('presence:') && !PRESENCE_VALUES.some(val => trimmedLine.includes(val))) {
-                    const presenceMatch = trimmedLine.match(/presence:\s*(.+)/);
-                    if (presenceMatch) {
-                        markers.push({
-                            severity: monaco.MarkerSeverity.Error,
-                            message: `Invalid presence '${presenceMatch[1].trim()}'. Valid values: ${PRESENCE_VALUES.join(', ')}`,
-                            startLineNumber: lineNumber,
-                            startColumn: line.indexOf(presenceMatch[1]) + 1,
-                            endLineNumber: lineNumber,
-                            endColumn: line.indexOf(presenceMatch[1]) + presenceMatch[1].length + 1
-                        });
-                    }
-                }
-            });
-
-            monaco.editor.setModelMarkers(model, 'ids-light', markers);
-        };
-
-        // Validate on content change
-        editor.onDidChangeModelContent(() => {
-            const model = editor.getModel();
-            if (model) {
-                validateModel(model);
-            }
-        });
+        // Note: Validation is set up in onMount when editor is available
 
         // Register code snippets
         monaco.languages.registerCompletionItemProvider(IDS_LIGHT_LANGUAGE_ID, {
-            provideCompletionItems: (model, position) => {
+            provideCompletionItems: (model: Monaco.editor.ITextModel, position: Monaco.Position) => {
                 const word = model.getWordUntilPosition(position);
                 const range = {
                     startLineNumber: position.lineNumber,
@@ -483,7 +434,7 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
                     endColumn: word.endColumn
                 };
 
-                const snippets: monaco.languages.CompletionItem[] = [
+                const snippets: Monaco.languages.CompletionItem[] = [
                     {
                         label: 'ids-template',
                         kind: monaco.languages.CompletionItemKind.Snippet,
@@ -682,27 +633,89 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
             // no-op if theme not ready
         }
 
+    };
+
+    const handleEditorDidMount = (editor: Monaco.editor.IStandaloneCodeEditor, monaco: typeof Monaco) => {
+        editorRef.current = editor;
+
+        // Apply theme
+        const selected = theme === 'dark' ? 'ids-light-dark' : 'ids-light-light';
+        try {
+            monaco.editor.setTheme(selected);
+            monacoThemeRef.current = selected;
+        } catch (e) {
+            // no-op if theme not ready
+        }
+
         // Set placeholder text if value is empty
         if (!value && placeholder) {
             editor.setValue(placeholder);
             editor.setSelection(new monaco.Selection(1, 1, 1, 1));
         }
+
+        // Set up validation on content change
+        const validateModel = (model: Monaco.editor.ITextModel) => {
+            const markers: Monaco.editor.IMarkerData[] = [];
+            const lines = model.getLinesContent();
+
+            lines.forEach((line: string, index: number) => {
+                const lineNumber = index + 1;
+                const trimmedLine = line.trim();
+
+                // Check for common IDS-Light errors
+                if (trimmedLine.includes('datatype:') && !DATA_TYPES.some(type => trimmedLine.includes(type))) {
+                    const datatypeMatch = trimmedLine.match(/datatype:\s*(.+)/);
+                    if (datatypeMatch) {
+                        markers.push({
+                            severity: monaco.MarkerSeverity.Error,
+                            message: `Invalid datatype '${datatypeMatch[1].trim()}'. Valid types: ${DATA_TYPES.join(', ')}`,
+                            startLineNumber: lineNumber,
+                            startColumn: line.indexOf(datatypeMatch[1]) + 1,
+                            endLineNumber: lineNumber,
+                            endColumn: line.indexOf(datatypeMatch[1]) + datatypeMatch[1].length + 1
+                        });
+                    }
+                }
+
+                if (trimmedLine.includes('presence:') && !PRESENCE_VALUES.some(val => trimmedLine.includes(val))) {
+                    const presenceMatch = trimmedLine.match(/presence:\s*(.+)/);
+                    if (presenceMatch) {
+                        markers.push({
+                            severity: monaco.MarkerSeverity.Error,
+                            message: `Invalid presence '${presenceMatch[1].trim()}'. Valid values: ${PRESENCE_VALUES.join(', ')}`,
+                            startLineNumber: lineNumber,
+                            startColumn: line.indexOf(presenceMatch[1]) + 1,
+                            endLineNumber: lineNumber,
+                            endColumn: line.indexOf(presenceMatch[1]) + presenceMatch[1].length + 1
+                        });
+                    }
+                }
+            });
+
+            monaco.editor.setModelMarkers(model, 'ids-light', markers);
+        };
+
+        // Validate on content change
+        editor.onDidChangeModelContent(() => {
+            const model = editor.getModel();
+            if (model) {
+                validateModel(model);
+            }
+        });
     };
 
     // Re-apply Monaco theme when Next theme changes
     useEffect(() => {
-        if (editorRef.current) {
-            const selected = theme === 'dark' ? 'ids-light-dark' : 'ids-light-light';
-            if (monacoThemeRef.current !== selected) {
-                try {
-                    monaco.editor.setTheme(selected);
-                    monacoThemeRef.current = selected;
-                } catch (e) {
-                    // ignore
-                }
+        const selected = theme === 'dark' ? 'ids-light-dark' : 'ids-light-light';
+        if (monacoApi && monacoThemeRef.current !== selected) {
+            try {
+                monacoApi.editor.setTheme(selected);
+                monacoThemeRef.current = selected;
+            } catch (e) {
+                // ignore
             }
         }
-    }, [theme]);
+    }, [theme, monacoApi]);
 
     const handleEditorChange = (newValue: string | undefined) => {
         if (newValue !== undefined) {
@@ -718,6 +731,7 @@ export function MonacoEditor({ value, onChange, placeholder, className }: Monaco
                 theme={theme === 'dark' ? 'ids-light-dark' : 'ids-light-light'}
                 value={value}
                 onChange={handleEditorChange}
+                beforeMount={handleBeforeMount}
                 onMount={handleEditorDidMount}
                 options={{
                     // Core editor features

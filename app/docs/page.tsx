@@ -241,12 +241,12 @@ export default function DocsPage() {
                                         <td className="p-2">Both</td>
                                     </tr>
                                     <tr>
-                                        <td className="p-2 font-mono text-xs">classification</td>
+                                        <td className="p-2 font-mono text-xs">classifications</td>
                                         <td className="p-2">Classification systems</td>
                                         <td className="p-2">Both</td>
                                     </tr>
                                     <tr>
-                                        <td className="p-2 font-mono text-xs">material</td>
+                                        <td className="p-2 font-mono text-xs">materials</td>
                                         <td className="p-2">Material specifications</td>
                                         <td className="p-2">Both</td>
                                     </tr>
@@ -917,7 +917,6 @@ export default function DocsPage() {
       entity: "IfcColumn"
       requiredMaterials:
         - value: "Steel"
-          presence: "required"
 `} />
                         </div>
                     </div>

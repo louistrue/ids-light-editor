@@ -150,7 +150,7 @@ export function InteractiveExample({
           {activeHighlights.length === 1 && (
             <div className="mt-3 p-3 rounded-lg bg-background border border-border">
               <p className="text-sm">
-                {highlights.find(h => typeof h !== 'string' && h.label === activeHighlights[0])?.description}
+                {(highlights.find(h => typeof h !== 'string' && h.label === activeHighlights[0]) as HighlightGroup)?.description}
               </p>
             </div>
           )}
