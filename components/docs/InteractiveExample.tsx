@@ -16,7 +16,7 @@ interface InteractiveExampleProps {
   description: string
   code: string
   explanation?: string
-  highlights?: (HighlightGroup | string)[] // Support both old and new format
+  highlights?: HighlightGroup[]
   tips?: string[]
 }
 
@@ -39,15 +39,6 @@ export function InteractiveExample({
         : [...prev, label]
     )
   }
-
-  // Flatten all highlight lines for the CodeBlock (with backward compatibility)
-  const allHighlightLines = highlights.flatMap(group => {
-    // Handle both old format (string[]) and new format (HighlightGroup[])
-    if (typeof group === 'string') {
-      return [{ line: group, color: 'amber' as const }]
-    }
-    return group.lines?.map(line => ({ line, color: group.color })) || []
-  })
 
   const colorVariants = {
     blue: {
@@ -124,18 +115,17 @@ export function InteractiveExample({
         <div className="border-b border-border bg-muted/20 p-4">
           <h4 className="text-sm font-medium mb-3 text-muted-foreground">Interactive Highlights</h4>
           <div className="flex flex-wrap gap-2">
-            {highlights.filter(group => typeof group !== 'string').map((group, index) => {
-              const highlightGroup = group as HighlightGroup
-              const color = highlightGroup.color
-              const isActive = activeHighlights.includes(highlightGroup.label)
+            {highlights.map((group, index) => {
+              const color = group.color
+              const isActive = activeHighlights.includes(group.label)
               return (
                 <button
                   key={index}
-                  onClick={() => handleHighlightToggle(highlightGroup.label)}
+                  onClick={() => handleHighlightToggle(group.label)}
                   className={`px-3 py-1.5 text-xs rounded-full border transition-all ${isActive ? colorVariants[color].active : colorVariants[color].inactive
                     }`}
                 >
-                  {highlightGroup.label}
+                  {group.label}
                 </button>
               )
             })}
@@ -150,7 +140,7 @@ export function InteractiveExample({
           {activeHighlights.length === 1 && (
             <div className="mt-3 p-3 rounded-lg bg-background border border-border">
               <p className="text-sm">
-                {(highlights.find(h => typeof h !== 'string' && h.label === activeHighlights[0]) as HighlightGroup)?.description}
+                {highlights.find(h => h.label === activeHighlights[0])?.description}
               </p>
             </div>
           )}
@@ -201,7 +191,7 @@ export function InteractiveExample({
           language="yaml"
           highlight={
             highlights
-              .filter((h): h is HighlightGroup => typeof h !== 'string' && activeHighlights.includes(h.label))
+              .filter(h => activeHighlights.includes(h.label))
               .flatMap(group => group.lines.map(line => ({ line, color: group.color })))
           }
           showCopy={true}
