@@ -1,6 +1,6 @@
-import YAML from "yaml"
 import Ajv, { type ErrorObject } from "ajv"
 import addFormats from "ajv-formats"
+import { parseIdsLight as customParseIdsLight } from "../yaml-parser"
 import { create } from "xmlbuilder2"
 
 export type Presence = "required" | "optional" | "prohibited"
@@ -28,6 +28,27 @@ export type RuleRequirement = {
   allowed_values?: (string | number | boolean)[]
   pattern?: string
   uri?: string // optional bSDD/URI
+  instructions?: string // optional author instructions
+}
+
+export type PartOfFacet = {
+  entity: string // IFC entity name (e.g., "IFCBUILDING", "IFCSPACE")
+  predefinedType?: string // optional predefined type
+  relation?: "IFCRELAGGREGATES" | "IFCRELASSIGNSTOGROUP" | "IFCRELCONTAINEDINSPATIALSTRUCTURE" | "IFCRELNESTS" | "IFCRELVOIDSELEMENT IFCRELFILLSELEMENT"
+  instructions?: string // optional author instructions
+}
+
+export type ClassificationFacet = {
+  system: string // classification system (e.g., "eBKP", "Uniclass", "OmniClass")
+  value?: string // optional classification value/code
+  uri?: string // optional URI reference
+  instructions?: string // optional author instructions
+}
+
+export type MaterialFacet = {
+  value?: string // optional material specification
+  uri?: string // optional URI reference
+  instructions?: string // optional author instructions
 }
 
 export type Classification = {
@@ -40,10 +61,22 @@ export type Rule = {
   name?: string
   entity: string // e.g. "IfcDoor"
   predefinedType?: string // e.g. "DOOR"
-  classification?: Classification
+
+  // Applicability facets (what elements this rule applies to)
+  partOf?: PartOfFacet[]
+  classifications?: ClassificationFacet[]
+  materials?: MaterialFacet[]
+
+  // Requirement facets (what requirements apply to matching elements)
   attributes?: RuleRequirement[]
   properties?: RuleRequirement[]
   quantities?: RuleRequirement[]
+  requiredPartOf?: PartOfFacet[]
+  requiredClassifications?: ClassificationFacet[]
+  requiredMaterials?: MaterialFacet[]
+
+  // Legacy classification field for backward compatibility
+  classification?: Classification
 }
 
 export type IdsLight = {
@@ -61,7 +94,7 @@ export type IdsLight = {
 // JSON Schema (kept compact)
 // ---------------------------
 export const IDS_LIGHT_JSON_SCHEMA = {
-  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $schema: "http://json-schema.org/draft-07/schema#",
   $id: "ids-light.schema.json",
   type: "object",
   required: ["ids"],
@@ -85,6 +118,21 @@ export const IDS_LIGHT_JSON_SCHEMA = {
               name: { type: "string" },
               entity: { type: "string", minLength: 3 },
               predefinedType: { type: "string" },
+
+              // Applicability facets
+              partOf: { $ref: "#/definitions/partOfList" },
+              classifications: { $ref: "#/definitions/classificationList" },
+              materials: { $ref: "#/definitions/materialList" },
+
+              // Requirements facets
+              attributes: { $ref: "#/definitions/reqList" },
+              properties: { $ref: "#/definitions/reqList" },
+              quantities: { $ref: "#/definitions/reqList" },
+              requiredPartOf: { $ref: "#/definitions/partOfList" },
+              requiredClassifications: { $ref: "#/definitions/classificationList" },
+              requiredMaterials: { $ref: "#/definitions/materialList" },
+
+              // Legacy classification field for backward compatibility
               classification: {
                 type: "object",
                 required: ["system"],
@@ -95,9 +143,6 @@ export const IDS_LIGHT_JSON_SCHEMA = {
                 },
                 additionalProperties: false,
               },
-              attributes: { $ref: "#/$defs/reqList" },
-              properties: { $ref: "#/$defs/reqList" },
-              quantities: { $ref: "#/$defs/reqList" },
             },
             additionalProperties: false,
           },
@@ -107,11 +152,11 @@ export const IDS_LIGHT_JSON_SCHEMA = {
     },
   },
   additionalProperties: false,
-  $defs: {
+  definitions: {
     reqList: {
       type: "array",
       minItems: 1,
-      items: { $ref: "#/$defs/reqItem" },
+      items: { $ref: "#/definitions/reqItem" },
     },
     reqItem: {
       type: "object",
@@ -145,8 +190,63 @@ export const IDS_LIGHT_JSON_SCHEMA = {
         },
         pattern: { type: "string" },
         uri: { type: "string", format: "uri" },
+        instructions: { type: "string" },
       },
       additionalProperties: false,
+    },
+    partOfFacet: {
+      type: "object",
+      required: ["entity"],
+      properties: {
+        entity: { type: "string", minLength: 3 },
+        predefinedType: { type: "string" },
+        relation: {
+          enum: [
+            "IFCRELAGGREGATES",
+            "IFCRELASSIGNSTOGROUP",
+            "IFCRELCONTAINEDINSPATIALSTRUCTURE",
+            "IFCRELNESTS",
+            "IFCRELVOIDSELEMENT IFCRELFILLSELEMENT"
+          ]
+        },
+        instructions: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    classificationFacet: {
+      type: "object",
+      required: ["system"],
+      properties: {
+        system: { type: "string" },
+        value: { type: "string" },
+        uri: { type: "string", format: "uri" },
+        instructions: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    materialFacet: {
+      type: "object",
+      properties: {
+        value: { type: "string" },
+        uri: { type: "string", format: "uri" },
+        instructions: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    partOfList: {
+      type: "array",
+      minItems: 1,
+      items: { $ref: "#/definitions/partOfFacet" },
+    },
+    classificationList: {
+      type: "array",
+      minItems: 1,
+      items: { $ref: "#/definitions/classificationFacet" },
+    },
+    materialList: {
+      type: "array",
+      minItems: 1,
+      items: { $ref: "#/definitions/materialFacet" },
     },
   },
 } as const
@@ -159,19 +259,7 @@ addFormats(ajv)
 const validateFn = ajv.compile(IDS_LIGHT_JSON_SCHEMA)
 
 export function parseIdsLight(text: string): IdsLight {
-  const src = text?.trim() ?? ""
-  if (!src) return { ids: { rules: [], ifcVersion: "IFC4" } } as any
-
-  // Try JSON first, then YAML
-  try {
-    return JSON.parse(src)
-  } catch { }
-  try {
-    return YAML.parse(src)
-  } catch (e: any) {
-    const msg = e?.message ? String(e.message) : "YAML parse error"
-    throw new Error(msg)
-  }
+  return customParseIdsLight(text) as IdsLight
 }
 
 export function validateIdsLight(data: unknown): { valid: boolean; errors?: string[] } {
@@ -226,14 +314,75 @@ export function convertIdsLightToXml(data: IdsLight, opts: ConvertOptions = {}):
     idsSimple(ent, "ids:name", rule.entity.toUpperCase())
     if (rule.predefinedType) idsSimple(ent, "ids:predefinedType", rule.predefinedType)
 
+    // Add partOf relationships
+    for (const partOf of rule.partOf || []) {
+      const partOfNode = appl.ele("ids:partOf")
+      if (partOf.relation) partOfNode.att("relation", partOf.relation)
+      if (partOf.instructions) partOfNode.att("instructions", partOf.instructions)
+
+      const partOfEntity = partOfNode.ele("ids:entity")
+      idsSimple(partOfEntity, "ids:name", partOf.entity.toUpperCase())
+      if (partOf.predefinedType) idsSimple(partOfEntity, "ids:predefinedType", partOf.predefinedType)
+    }
+
+    // Add classification constraints
+    for (const classification of rule.classifications || []) {
+      const classNode = appl.ele("ids:classification")
+      idsSimple(classNode, "ids:system", classification.system)
+      if (classification.value) idsSimple(classNode, "ids:value", classification.value)
+    }
+
+    // Add material constraints
+    for (const material of rule.materials || []) {
+      const matNode = appl.ele("ids:material")
+      if (material.value) idsSimple(matNode, "ids:value", material.value)
+    }
+
     // ---- Requirements
     const reqs = spec.ele("ids:requirements", { description: "Generated from IDS-Light" })
+
+    // Required partOf relationships
+    for (const partOf of rule.requiredPartOf || []) {
+      const partOfNode = reqs.ele("ids:partOf", {
+        cardinality: "required",
+      })
+      if (partOf.relation) partOfNode.att("relation", partOf.relation)
+      if (partOf.instructions) partOfNode.att("instructions", partOf.instructions)
+
+      const partOfEntity = partOfNode.ele("ids:entity")
+      idsSimple(partOfEntity, "ids:name", partOf.entity.toUpperCase())
+      if (partOf.predefinedType) idsSimple(partOfEntity, "ids:predefinedType", partOf.predefinedType)
+    }
+
+    // Required classifications
+    for (const classification of rule.requiredClassifications || []) {
+      const classNode = reqs.ele("ids:classification", {
+        cardinality: "required",
+      })
+      if (classification.uri) classNode.att("uri", classification.uri)
+      if (classification.instructions) classNode.att("instructions", classification.instructions)
+
+      idsSimple(classNode, "ids:system", classification.system)
+      if (classification.value) idsSimple(classNode, "ids:value", classification.value)
+    }
+
+    // Required materials
+    for (const material of rule.requiredMaterials || []) {
+      const matNode = reqs.ele("ids:material", {
+        cardinality: "required",
+      })
+      if (material.uri) matNode.att("uri", material.uri)
+      if (material.instructions) matNode.att("instructions", material.instructions)
+
+      if (material.value) idsSimple(matNode, "ids:value", material.value)
+    }
 
     // Attributes
     for (const a of rule.attributes || []) {
       const node = reqs.ele("ids:attribute", {
         cardinality: presenceToCard(a.presence),
       })
+      if (a.instructions) node.att("instructions", a.instructions)
       idsSimple(node, "ids:name", a.name)
       facetValue(node, a.datatype, a.allowed_values, a.pattern)
     }
@@ -246,6 +395,8 @@ export function convertIdsLightToXml(data: IdsLight, opts: ConvertOptions = {}):
         dataType: ifcType,
         cardinality: presenceToCard(p.presence),
       })
+      if (p.uri) node.att("uri", p.uri)
+      if (p.instructions) node.att("instructions", p.instructions)
       idsSimple(node, "ids:propertySet", pset)
       idsSimple(node, "ids:baseName", base)
       facetValue(node, p.datatype, p.allowed_values, p.pattern)
@@ -259,6 +410,8 @@ export function convertIdsLightToXml(data: IdsLight, opts: ConvertOptions = {}):
         dataType: ifcType,
         cardinality: presenceToCard(q.presence),
       })
+      if (q.uri) node.att("uri", q.uri)
+      if (q.instructions) node.att("instructions", q.instructions)
       idsSimple(node, "ids:propertySet", pset)
       idsSimple(node, "ids:baseName", base)
       facetValue(node, q.datatype ?? guessMeasureFromQto(base), q.allowed_values, q.pattern)

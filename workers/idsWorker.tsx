@@ -25,6 +25,47 @@ function validateWithDetailedErrors(data: any): { valid: boolean; errors: string
       errors.push(`Rule ${ruleNum}: Missing 'entity' field`)
     }
 
+    // Check partOf facets
+    if (rule.partOf) {
+      rule.partOf.forEach((partOf: any, partOfIndex: number) => {
+        const facetNum = partOfIndex + 1
+        if (!partOf.entity) {
+          errors.push(`Rule ${ruleNum}, PartOf ${facetNum}: Missing 'entity' field`)
+        }
+      })
+    }
+
+    if (rule.requiredPartOf) {
+      rule.requiredPartOf.forEach((partOf: any, partOfIndex: number) => {
+        const facetNum = partOfIndex + 1
+        if (!partOf.entity) {
+          errors.push(`Rule ${ruleNum}, Required PartOf ${facetNum}: Missing 'entity' field`)
+        }
+      })
+    }
+
+    // Check classification facets
+    if (rule.classifications) {
+      rule.classifications.forEach((classification: any, classIndex: number) => {
+        const facetNum = classIndex + 1
+        if (!classification.system) {
+          errors.push(`Rule ${ruleNum}, Classification ${facetNum}: Missing 'system' field`)
+        }
+      })
+    }
+
+    if (rule.requiredClassifications) {
+      rule.requiredClassifications.forEach((classification: any, classIndex: number) => {
+        const facetNum = classIndex + 1
+        if (!classification.system) {
+          errors.push(`Rule ${ruleNum}, Required Classification ${facetNum}: Missing 'system' field`)
+        }
+      })
+    }
+
+    // Check material facets (no required fields beyond the array itself)
+    // Materials are optional
+
     // Check attributes
     if (rule.attributes) {
       rule.attributes.forEach((attr: any, attrIndex: number) => {

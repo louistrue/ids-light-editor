@@ -85,8 +85,10 @@ function parseYAML(yamlStr) {
         const fieldName = trimmed.split(":")[0].trim()
         const fieldValue = extractValue(trimmed)
 
-        // Check if this is a section (properties, attributes, quantities)
-        if (fieldName === "attributes" || fieldName === "properties" || fieldName === "quantities") {
+        // Check if this is a section (properties, attributes, quantities, or new facets)
+        if (fieldName === "attributes" || fieldName === "properties" || fieldName === "quantities" ||
+          fieldName === "requiredPartOf" || fieldName === "partOf" || fieldName === "classifications" ||
+          fieldName === "materials" || fieldName === "requiredClassifications" || fieldName === "requiredMaterials") {
           console.log(`[v0] Starting ${fieldName} section`)
           currentSection = fieldName
           currentRule[fieldName] = []
