@@ -1,5 +1,7 @@
 "use client"
 
+import { useIdsValidation } from "@/hooks/use-ids-validation"
+
 import type React from "react"
 
 import { useEffect, useRef, useState, useCallback } from "react"
@@ -189,9 +191,7 @@ export function EditorShell() {
   const workerRef = useRef<Worker | null>(null)
   const workerInitializedRef = useRef<boolean>(false)
 
-  const [validationResult, setValidationResult] = useState<string | null>(null);
-  const [isValidating, setIsValidating] = useState(false);
-  const [lastValidatedXml, setLastValidatedXml] = useState<string>('');
+  const { validationResult, isValidating, validate: handleValidate } = useIdsValidation(xml, outputView === "validation");
 
   useEffect(() => {
     setHydrated(true);
@@ -319,13 +319,6 @@ export function EditorShell() {
     }
   }, [xml, readable])
 
-  // Auto-validate when switching to validation tab
-  useEffect(() => {
-    if (outputView === "validation" && xml && xml !== lastValidatedXml && !isValidating) {
-      handleValidate()
-    }
-  }, [outputView, xml, lastValidatedXml, isValidating])
-
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault()
     setIsDragging(true)
@@ -428,78 +421,7 @@ export function EditorShell() {
     }
   }
 
-  const handleValidate = async () => {
-    if (!xml) return;
-    setIsValidating(true);
-    setValidationResult(null);
-    try {
-      const response = await fetch('/api/validate-ids', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ xml }),
-      });
-      const data = await response.json();
-      if (data.error) {
-        setValidationResult(`Error: ${data.error}`);
-      } else {
-        // Parse IDS audit response for better display
-        const statusMessages: { [key: number]: { text: string; color: string; icon: string } } = {
-          0: { text: 'Valid IDS - No errors found', color: 'text-green-600', icon: '✅' },
-          3: { text: 'Invalid Options - Configuration error', color: 'text-yellow-600', icon: '⚙️' },
-          4: { text: 'Not Found - Referenced resources missing', color: 'text-orange-600', icon: '🔍' },
-          5: { text: 'Structure Error - Invalid XML or missing elements', color: 'text-red-600', icon: '🏗️' },
-          6: { text: 'Content Error - Violates specification rules', color: 'text-red-600', icon: '📝' },
-          7: { text: 'Schema Error - Doesn\'t conform to XSD schema', color: 'text-red-600', icon: '📋' },
-          8: { text: 'Unhandled Error - Unexpected validation error', color: 'text-red-600', icon: '❌' }
-        };
 
-        const statusInfo = statusMessages[data.status] || { text: `Unknown status code ${data.status}`, color: 'text-gray-600', icon: '❓' };
-
-        let display = '';
-
-        // Overall status
-        display += `${statusInfo.icon} **${statusInfo.text}**\n\n`;
-
-        // Parse events if available
-        if (data.events && Array.isArray(data.events)) {
-          const errors = data.events.filter((e: any) => e.Level === 'Error' || e.Level === 'Critical');
-          const warnings = data.events.filter((e: any) => e.Level === 'Warning');
-          const info = data.events.filter((e: any) => e.Level === 'Information');
-
-          if (errors.length > 0) {
-            display += `## ❌ Errors (${errors.length})\n\n`;
-            errors.forEach((error: any, i: number) => {
-              display += `${i + 1}. ${error.Message}\n\n`;
-            });
-          }
-
-          if (warnings.length > 0) {
-            display += `## ⚠️ Warnings (${warnings.length})\n\n`;
-            warnings.forEach((warning: any, i: number) => {
-              display += `${i + 1}. ${warning.Message}\n\n`;
-            });
-          }
-
-          if (info.length > 0) {
-            display += `## ℹ️ Information (${info.length})\n\n`;
-            info.forEach((infoItem: any, i: number) => {
-              display += `${i + 1}. ${infoItem.Message}\n\n`;
-            });
-          }
-        } else {
-          // Fallback to raw text
-          display += data.text || JSON.stringify(data, null, 2);
-        }
-
-        setValidationResult(display);
-        setLastValidatedXml(xml); // Mark this XML as validated
-      }
-    } catch (err) {
-      setValidationResult('Failed to connect to validation service');
-    } finally {
-      setIsValidating(false);
-    }
-  };
 
   const loadExample = (exampleKey: keyof typeof examples) => {
     setSource(examples[exampleKey].yaml)
@@ -1044,7 +966,13 @@ export function EditorShell() {
 
                 {hydrated && outputView === "validation" && (
                   <div className="animate-in fade-in duration-300 h-full flex flex-col">
-                    <h3 className="text-sm font-medium mb-2 text-foreground flex-shrink-0">Validation Results:</h3>
+                    <div className="flex items-center justify-between mb-2 flex-shrink-0">
+                      <h3 className="text-sm font-medium text-foreground">Validation Results:</h3>
+                      <button type="button" onClick={() => handleValidate()} disabled={!xml || isValidating}
+                        className="text-xs px-3 py-1 border border-border rounded-md disabled:opacity-50">
+                        Validate IDS
+                      </button>
+                    </div>
                     <div className="flex-1 overflow-auto scrollbar-thin">
                       {isValidating ? (
                         <div className="flex items-center justify-center h-32">

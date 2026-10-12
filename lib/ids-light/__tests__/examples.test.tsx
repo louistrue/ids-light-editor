@@ -1,3 +1,4 @@
+import { describe, it, expect } from "@jest/globals"
 import { convertIdsLightToXml, parseIdsLight, validateIdsLight } from ".."
 
 // Import the real examples from the UI component
@@ -148,15 +149,7 @@ describe("IDS-Light Example Conversions", () => {
   for (const [key, example] of Object.entries(examples)) {
     it(`should correctly parse, validate, and convert the "${example.name}" example`, () => {
       // 1. Parse the YAML
-      let parsedData
-      expect(() => {
-        parsedData = parseIdsLight(example.yaml)
-      }).not.toThrow()
-
-      // Ensure parsedData is not undefined before proceeding
-      if (!parsedData) {
-        throw new Error("Parsing failed, parsedData is undefined.")
-      }
+      const parsedData = parseIdsLight(example.yaml)
 
       // 2. Validate the parsed data against the schema
       const validationResult = validateIdsLight(parsedData)
@@ -164,10 +157,7 @@ describe("IDS-Light Example Conversions", () => {
       expect(validationResult.errors).toBeUndefined()
 
       // 3. Convert to XML
-      let xmlOutput
-      expect(() => {
-        xmlOutput = convertIdsLightToXml(parsedData)
-      }).not.toThrow()
+      const xmlOutput = convertIdsLightToXml(parsedData)
 
       // 4. Basic XML sanity checks
       expect(xmlOutput).toBeTruthy()

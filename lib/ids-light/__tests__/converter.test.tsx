@@ -228,8 +228,8 @@ describe("IDS-Light Converter", () => {
           datatype: "string" # Another comment
           presence: "required"`
       const data = parseIdsLight(yamlWithComments)
-      expect(data.ids.rules[0].classifications[0].value).toBe("EF_25_30_40_40")
-      expect(data.ids.rules[0].properties[0].datatype).toBe("string")
+      expect(data.ids.rules[0].classifications?.[0].value).toBe("EF_25_30_40_40")
+      expect(data.ids.rules[0].properties?.[0].datatype).toBe("string")
     })
 
     it("should map datatypes to correct IFC types", () => {

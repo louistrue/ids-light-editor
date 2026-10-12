@@ -1,11 +1,12 @@
 # IDS‑Light Editor
 
-Create, convert, and validate comprehensive buildingSMART IDS files from friendly IDS‑Light YAML/JSON. Full support for all IDS facets: partOf relationships, classifications, materials, properties, attributes, and quantities with cardinality. Includes beautiful in-app documentation and runs in the browser with instant feedback and optional server‑side auditing.
+Create, convert, and validate comprehensive buildingSMART IDS files from friendly IDS‑Light YAML/JSON. Full support for all IDS facets: partOf relationships, classifications, materials, properties, attributes, and quantities with cardinality. Includes beautiful in-app documentation and runs in the browser with instant feedback and server‑side IDS document auditing powered by ifc-lite.
 
 ## Features
 
 - **YAML/JSON Input**: Author IDS‑Light in human‑readable YAML/JSON
 - **Live Validation**: JSON‑Schema with clear errors
+- **IDS Document Audit**: Local `@ifc-lite/ids` checks for IDS structure, IFC schema references, and constraint coherence; no external validator service or API credentials required
 - **XML Conversion**: Standards‑compliant IDS 1.0 XML
 - **Complete Facet Support**: partOf relationships, classifications, and materials with cardinality
 - **Web Worker**: Non‑blocking conversion
@@ -37,10 +38,12 @@ The editor includes comprehensive in-app documentation accessible via the "Docs"
 ### Testing
 
 ```bash
-pnpm test
+pnpm run test:all # includes the real ifc-lite auditor and browser-worker integration
 pnpm run test:watch
 pnpm run test:coverage
 ```
+
+IDS auditing checks the authored document. To check whether an IFC model meets its requirements, download the `.ids` file and run model validation in ifc-lite. The BFH classroom example is in `docs/examples/bfh-fire-rating.yaml`.
 
 ## Usage
 
@@ -821,7 +824,7 @@ Use your existing service and set the URL and API key in `.env.local`.
 pnpm build
 pnpm dev
 pnpm start
-pnpm test
+pnpm run test:all # includes the real ifc-lite auditor and browser-worker integration
 pnpm run test:watch
 pnpm run test:coverage
 ```
