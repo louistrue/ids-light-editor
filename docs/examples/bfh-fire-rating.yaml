@@ -1,0 +1,14 @@
+ids:
+  ifcVersion: "IFC2X3"   # Modell ist IFC2X3! (vorab im Editor testen)
+  title: "Türen – Feuerwiderstand"
+  author: "BXMid03"
+  date: "2026-10-06"
+  rules:
+    - name: "IfcDoor FireRating"
+      # LOIN: Zweck Brandschutznachweis · Meilenstein Ende Phase 32
+      entity: "IfcDoor"
+      properties:
+        - name: "Pset_DoorCommon.FireRating"
+          datatype: "string"
+          presence: "required"
+          allowed_values: ["EI30", "EI60", "EI90", "keine Anforderung"]

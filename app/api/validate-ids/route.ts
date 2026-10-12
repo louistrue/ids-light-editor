@@ -1,44 +1,25 @@
 import { NextResponse } from 'next/server';
+import { auditIDSDocument } from '@ifc-lite/ids';
+
+export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
-    const { xml } = await request.json();
-
-    if (!xml) {
+    let xml: unknown;
+    try {
+        ({ xml } = await request.json());
+    } catch {
+        return NextResponse.json({ error: 'Invalid JSON request' }, { status: 400 });
+    }
+    if (typeof xml !== 'string' || !xml.trim()) {
         return NextResponse.json({ error: 'Missing XML content' }, { status: 400 });
     }
 
-    const formData = new FormData();
-    formData.append('ids_file', new Blob([xml], { type: 'application/xml' }), 'audit.ids');
-
-    const apiUrl = process.env.IFCTESTER_API_URL;
-    const apiKey = process.env.IFCTESTER_API_KEY;
-
-    if (!apiUrl) {
-        return NextResponse.json({ error: 'API URL not configured' }, { status: 500 });
-    }
-
-    if (!apiKey) {
-        return NextResponse.json({ error: 'API key not configured' }, { status: 500 });
-    }
-
     try {
-        const response = await fetch(`${apiUrl}/ids-audit?include_report=true&report_format=json`, {
-            method: 'POST',
-            headers: {
-                'x-api-key': apiKey,
-            },
-            body: formData,
-        });
-
-        if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
-        }
-
-        const result = await response.json();
-        console.log('IDS audit result:', JSON.stringify(result, null, 2));
-        return NextResponse.json(result);
+        // Audit the IDS document itself. IFC model validation is a separate step.
+        const { status, issues } = await auditIDSDocument(xml);
+        return NextResponse.json({ status, issues });
     } catch (error) {
-        console.error('Validation error:', error);
-        return NextResponse.json({ error: 'Failed to validate IDS' }, { status: 500 });
+        console.error('IDS document audit failed:', error);
+        return NextResponse.json({ error: 'IDS validation failed. Please retry. You can still download the generated IDS XML.' }, { status: 500 });
     }
 }
